@@ -1,0 +1,98 @@
+{
+  "version": "1.0.0",
+  "author": "luoshanzhi",
+  "name": "monster",
+  "env": "dev",
+  "envConfig": {
+    "dev": {
+      "logLevel": "trace",
+      "mysql": {
+        "master": [
+          {
+            "host": "127.0.0.1",
+            "user": "user",
+            "password": "password",
+            "database": "database",
+            "port": 3306
+          }
+        ],
+        "slave": [
+          {
+            "host": "127.0.0.1",
+            "user": "user",
+            "password": "password",
+            "database": "database",
+            "port": 3306
+          }
+        ]
+      },
+      "redis": [
+        {
+          "host": "127.0.0.1",
+          "password": "password",
+          "port": 6379
+        }
+      ]
+    },
+    "beta": {
+      "logLevel": "debug",
+      "mysql": {
+        "master": [
+          {
+            "host": "127.0.0.1",
+            "user": "user",
+            "password": "password",
+            "database": "database",
+            "port": 3306
+          }
+        ],
+        "slave": [
+          {
+            "host": "127.0.0.1",
+            "user": "user",
+            "password": "password",
+            "database": "database",
+            "port": 3306
+          }
+        ]
+      },
+      "redis": [
+        {
+          "host": "127.0.0.1",
+          "password": "password",
+          "port": 6379
+        }
+      ]
+    },
+    "release": {
+      "logLevel": "info",
+      "mysql": {
+        "master": [
+          {
+            "host": "127.0.0.1",
+            "user": "user",
+            "password": "password",
+            "database": "database",
+            "port": 3306
+          }
+        ],
+        "slave": [
+          {
+            "host": "127.0.0.1",
+            "user": "user",
+            "password": "password",
+            "database": "database",
+            "port": 3306
+          }
+        ]
+      },
+      "redis": [
+        {
+          "host": "127.0.0.1",
+          "password": "password",
+          "port": 6379
+        }
+      ]
+    }
+  }
+}
