@@ -27,10 +27,13 @@ var (
 		Graceful bool
 	}
 	SettingConfig Setting
-	CurEnv        string
+	CurEnv        string //dev,beta,release
 	CurEnvConfig  EnvConfig
 	AccessLog     = logrus.New()
 	CommonLog     = logrus.New()
+	logLevel      string
+	logPath       string
+	settingFile   string
 )
 
 func init() {
@@ -44,35 +47,48 @@ func init() {
 	Args.Path = path
 	Args.Graceful = *gracefulPtr
 	RootPath = path + "/"
+	CurEnv = "dev"
+	logLevel = "trace"
+	logPath = path + "/log"
 }
 
-func Init(settingFile string, logPath string, fm map[string]interface{}) {
-	//初始化配置
-	var settingConfig Setting
-	if err := loadJson(settingFile, &settingConfig); err != nil {
+func Init(fm map[string]interface{}) {
+	if err := setSetting(); err != nil {
 		panic(err)
 	}
-	SettingConfig = settingConfig
-	CurEnv = settingConfig.Env
-	CurEnvConfig = settingConfig.EnvConfig[CurEnv]
-	if err := setLog(logPath); err != nil {
+	if err := setLog(); err != nil {
 		panic(err)
 	}
 	factoryMap = fm
 }
 
-func setLog(logPath string) error {
-	reg := regexp.MustCompile(`/$`)
-	logPath = reg.ReplaceAllString(strings.TrimSpace(logPath), "") + "/"
+func setSetting() error {
+	if settingFile != "" {
+		//初始化配置
+		var settingConfig Setting
+		if err := loadJson(settingFile, &settingConfig); err != nil {
+			return err
+		}
+		SettingConfig = settingConfig
+		CurEnv = settingConfig.Env
+		CurEnvConfig = settingConfig.EnvConfig[CurEnv]
+		logLevel = CurEnvConfig.LogLevel
+	}
+	return nil
+}
+
+func setLog() error {
 	if !exists(logPath) {
-		return errors.New(`"` + logPath + `"路径不存在`)
+		if err := os.Mkdir(logPath, os.ModePerm); err != nil {
+			return err
+		}
 	}
-	logLevel, logLevelErr := logrus.ParseLevel(CurEnvConfig.LogLevel)
-	if logLevelErr != nil {
-		return logLevelErr
+	level, levelErr := logrus.ParseLevel(logLevel)
+	if levelErr != nil {
+		return levelErr
 	}
-	AccessLog.SetLevel(logLevel)
-	CommonLog.SetLevel(logLevel)
+	AccessLog.SetLevel(level)
+	CommonLog.SetLevel(level)
 	accessLogFile := logPath + "access.log"
 	commonLogFile := logPath + "module.log"
 	/* 日志轮转相关函数
@@ -105,6 +121,15 @@ func setLog(logPath string) error {
 	set(AccessLog, accessLogFile)
 	set(CommonLog, commonLogFile)
 	return nil
+}
+
+func SetLogPath(path string) {
+	reg := regexp.MustCompile(`/$`)
+	logPath = reg.ReplaceAllString(strings.TrimSpace(path), "") + "/"
+}
+
+func SetSettingFile(file string) {
+	settingFile = strings.TrimSpace(file)
 }
 
 func callFunc(obj interface{}, name string, args ...interface{}) {
@@ -161,60 +186,141 @@ func inject(obj interface{}) {
 			if val == "" {
 				continue
 			}
-			switch fieldValue.Kind() {
+			if fieldType.Kind() == reflect.Ptr {
+				fieldType = fieldType.Elem()
+			}
+			switch fieldType.Kind() {
 			case reflect.String:
-				unsafeFieldValue.Set(reflect.ValueOf(val))
+				if unsafeFieldValue.Kind() == reflect.Ptr {
+					unsafeFieldValue.Set(reflect.ValueOf(&val))
+				} else {
+					unsafeFieldValue.Set(reflect.ValueOf(val))
+				}
 			case reflect.Int, reflect.Int64:
 				if val, err := strconv.ParseInt(val, 10, 64); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(int(val)))
+					newVal := int(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Int32:
 				if val, err := strconv.ParseInt(val, 10, 32); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(int32(val)))
+					newVal := int32(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Int16:
 				if val, err := strconv.ParseInt(val, 10, 16); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(int16(val)))
+					newVal := int16(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Int8:
 				if val, err := strconv.ParseInt(val, 10, 8); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(int8(val)))
+					newVal := int8(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Uint, reflect.Uint64:
 				if val, err := strconv.ParseUint(val, 10, 64); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(uint(val)))
+					newVal := uint(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Uint32:
 				if val, err := strconv.ParseUint(val, 10, 32); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(uint32(val)))
+					newVal := uint32(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Uint16:
 				if val, err := strconv.ParseUint(val, 10, 16); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(uint16(val)))
+					newVal := uint16(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Uint8:
 				if val, err := strconv.ParseUint(val, 10, 8); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(uint8(val)))
+					newVal := uint8(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Float64:
 				if val, err := strconv.ParseFloat(val, 64); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(float64(val)))
+					newVal := float64(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Float32:
 				if val, err := strconv.ParseFloat(val, 32); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(float32(val)))
+					newVal := float32(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Bool:
 				if val, err := strconv.ParseBool(val); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(val))
+					newVal := val
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Complex64:
 				if val, err := strconv.ParseComplex(val, 64); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(complex64(val)))
+					newVal := complex64(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
 				}
 			case reflect.Complex128:
 				if val, err := strconv.ParseComplex(val, 128); err == nil {
-					unsafeFieldValue.Set(reflect.ValueOf(complex128(val)))
+					newVal := complex128(val)
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
+				}
+			default:
+				obValue := reflect.New(fieldType)
+				if err := json.Unmarshal([]byte(val), obValue.Interface()); err == nil {
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(obValue)
+					} else {
+						unsafeFieldValue.Set(obValue.Elem())
+					}
 				}
 			}
 		}
@@ -223,6 +329,9 @@ func inject(obj interface{}) {
 
 func loadJson(fileName string, data interface{}) error {
 	fileName = strings.TrimSpace(fileName)
+	if !exists(fileName) {
+		return errors.New(`"` + fileName + `IsNotExist`)
+	}
 	b, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return err

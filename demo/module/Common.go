@@ -9,6 +9,18 @@ import (
 )
 
 type Common struct {
+	str    string   `val:"怪兽"`
+	num    int      `val:"123"`
+	numArr []int    `val:"[12,34,56,78,90]"`
+	strArr []string `val:"[\"aa\",\"bb\",\"cc\",\"dd\",\"ee\"]"`
+	ob     struct {
+		Age  int
+		Name string
+	} `val:"{\"age\":18,\"name\":\"怪兽\"}"`
+}
+
+func (the *Common) Print() {
+	fmt.Println(the.str, the.num, the.numArr, the.strArr, the.ob)
 }
 
 func (the *Common) Init() {
