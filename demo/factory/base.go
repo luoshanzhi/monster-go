@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/luoshanzhi/monster-go/core"
+	"github.com/luoshanzhi/monster-go"
 	"time"
 )
 
@@ -45,6 +45,8 @@ func (the *Common) Print() {
 	fmt.Println(the.str, the.num, the.bl, the.numArr, the.strArr, the.ob)
 }
 
+//struct 实现空 Multiton 方法就代表多例，每次工厂取出都是全新的实例
+
 var factoryMap = map[string]interface{}{
 	"Bird":   (*Bird)(nil),
 	"Dog":    (*Dog)(nil),
@@ -52,10 +54,10 @@ var factoryMap = map[string]interface{}{
 }
 
 func main() {
-	core.Init(factoryMap) //初始化工厂
-	bird := core.Factory("Bird").(*Bird)
-	dog := core.Factory("Dog").(*Dog)
-	common := core.Factory("Common").(*Common)
+	monster.Init(factoryMap) //初始化工厂
+	bird := monster.Factory("Bird").(*Bird)
+	dog := monster.Factory("Dog").(*Dog)
+	common := monster.Factory("Common").(*Common)
 	bird.Fly()
 	dog.Run()
 	common.Print()
