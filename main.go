@@ -1,4 +1,4 @@
-package core
+package monster
 
 import (
 	"encoding/json"
@@ -24,7 +24,7 @@ var (
 	RootPath        string
 	Args            struct {
 		Path     string
-		Graceful bool
+		Graceful string
 	}
 	SettingConfig Setting
 	CurEnv        string //dev,beta,release
@@ -38,18 +38,18 @@ var (
 
 func init() {
 	pathPtr := flag.String("path", "", "项目路径")
-	gracefulPtr := flag.Bool("graceful", false, "从文件描述符打开listener")
+	gracefulPtr := flag.String("graceful", "", "从文件描述符打开listener")
 	flag.Parse()
 	path := strings.TrimSpace(*pathPtr)
 	if path == "" {
 		path, _ = os.Getwd()
 	}
 	Args.Path = path
-	Args.Graceful = *gracefulPtr
+	Args.Graceful = strings.TrimSpace(*gracefulPtr)
 	RootPath = path + "/"
 	CurEnv = "dev"
 	logLevel = "trace"
-	logPath = path + "/log"
+	logPath = path + "/log/"
 }
 
 func Init(fm map[string]interface{}) {
@@ -386,4 +386,12 @@ func Factory(name string, args ...interface{}) interface{} {
 	}
 	callFunc(obj, "Use", args...)
 	return obj
+}
+
+func FirstLower(str string) string {
+	return strings.ToLower(str[0:1]) + str[1:]
+}
+
+func FirstUpper(str string) string {
+	return strings.ToUpper(str[0:1]) + str[1:]
 }

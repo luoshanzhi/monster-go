@@ -1,4 +1,4 @@
-package core
+package monster
 
 type Multiton interface {
 	Multiton()

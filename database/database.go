@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/luoshanzhi/monster-go/core"
+	"github.com/luoshanzhi/monster-go"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -79,8 +79,8 @@ func BaseOpen(dbType string, connMaxLifetime time.Duration, maxOpenConns int, ma
 	if dbType != "master" && dbType != "slave" {
 		panic("dbType参数错误")
 	}
-	mysqlConfig := core.CurEnvConfig.Mysql
-	var dbArr []core.MysqlSettingItem
+	mysqlConfig := monster.CurEnvConfig.Mysql
+	var dbArr []monster.MysqlSettingItem
 	if dbType == "master" {
 		dbArr = mysqlConfig.Master
 	} else if dbType == "slave" {
@@ -112,10 +112,10 @@ func BaseOpen(dbType string, connMaxLifetime time.Duration, maxOpenConns int, ma
 	}
 	if dbType == "master" {
 		masters = dbs
-		core.CommonLog.Info("数据库: 主库启动成功")
+		monster.CommonLog.Info("数据库: 主库启动成功")
 	} else if dbType == "slave" {
 		slaves = dbs
-		core.CommonLog.Info("数据库: 从库启动成功")
+		monster.CommonLog.Info("数据库: 从库启动成功")
 	}
 }
 
@@ -195,7 +195,7 @@ func BaseQuery(handler Handler, prepare bool, col interface{}, query string, arg
 		}
 		colItemTagMap[val] = name
 	}
-	core.CommonLog.Trace("sql:", query)
+	monster.CommonLog.Trace("sql:", query)
 	var rows *sql.Rows
 	var err error
 	if prepare {
@@ -225,7 +225,7 @@ func BaseQuery(handler Handler, prepare bool, col interface{}, query string, arg
 				column = name
 			} else {
 				//字段没设置tag,就按首字母大写找字段
-				column = core.FirstUpper(column)
+				column = monster.FirstUpper(column)
 			}
 			if _, ok := colItemType.FieldByName(column); ok {
 				colField := newValue.FieldByName(column)
@@ -318,7 +318,7 @@ func BaseExec(handler Handler, prepare bool, query string, args ...interface{}) 
 	if handler == nil {
 		return nil, errors.New("handler为nil")
 	}
-	core.CommonLog.Trace("sql:", query)
+	monster.CommonLog.Trace("sql:", query)
 	if prepare {
 		stmt, err := handler.Prepare(query)
 		if err != nil {

@@ -3,8 +3,9 @@ package mvc
 import (
 	"context"
 	"encoding/json"
-	"github.com/luoshanzhi/monster-go/core"
-	"github.com/luoshanzhi/monster-go/core/graceful"
+	"errors"
+	"github.com/luoshanzhi/monster-go"
+	"github.com/luoshanzhi/monster-go/graceful"
 	"io/ioutil"
 	"mime/multipart"
 	"net"
@@ -15,59 +16,113 @@ import (
 	"strings"
 )
 
-var (
-	interceptors []Interceptor
-)
-
-func Start(port int, parseRoute func(req *http.Request) (Route, error), inter ...Interceptor) {
-	if parseRoute == nil {
-		core.CommonLog.Fatal("还未设置路由解析函数")
+func Serve(servers ...*Server) {
+	type Option struct {
+		listener net.Listener
+		server   *http.Server
+		vaild    bool
 	}
-	interceptors = inter
-	var handle http.HandlerFunc = func(w http.ResponseWriter, req *http.Request) {
-		routeHandle(parseRoute, w, req)
+	optionMap := make(map[string]*Option)
+	gracefulStr := strings.TrimSpace(monster.Args.Graceful)
+	if gracefulStr != "" {
+		addrs := strings.Split(gracefulStr, ",")
+		for i, addr := range addrs {
+			// 在linux中，值为0、1、2的fd，分别代表标准输入、标准输出、标准错误输出，因为 0 1 2已经被linux使用了
+			// 返回具有给定文件描述符和名称的新文件。如果fd不是有效的文件描述符，则返回值为nil。
+			// 3是什么？3其实就是从父进程继承过来的socket fd。虽然子进程可以默认继承父进程绝大多数的文件描述符（除了文件锁之类的），但是golang的标准库os/exec只默认继承stdin stdout stderr这三个。
+			// 需要让子进程继承的fd需要在fork之前手动放到ExtraFiles中。由于有了stdin 0 stdout 1 stderr 2，因此其它fd的序号从3开始。
+			if listener, err := net.FileListener(os.NewFile(3+uintptr(i), "")); err == nil {
+				optionMap[strings.TrimSpace(addr)] = &Option{
+					listener: listener,
+				}
+			}
+		}
 	}
-	portStr := strconv.Itoa(port)
-	server := &http.Server{Addr: ":" + portStr, Handler: handle}
-	var listener net.Listener
-	var err error
-	if core.Args.Graceful {
-		// 在linux中，值为0、1、2的fd，分别代表标准输入、标准输出、标准错误输出，因为 0 1 2已经被linux使用了
-		// 返回具有给定文件描述符和名称的新文件。如果fd不是有效的文件描述符，则返回值为nil。
-		// 3是什么？3其实就是从父进程继承过来的socket fd。虽然子进程可以默认继承父进程绝大多数的文件描述符（除了文件锁之类的），但是golang的标准库os/exec只默认继承stdin stdout stderr这三个。
-		// 需要让子进程继承的fd需要在fork之前手动放到ExtraFiles中。由于有了stdin 0 stdout 1 stderr 2，因此其它fd的序号从3开始。
-		listener, err = net.FileListener(os.NewFile(3, ""))
-		core.CommonLog.Info("mvc(" + portStr + "): 正在热更新")
-	} else {
-		listener, err = net.Listen("tcp", server.Addr)
+	for i, server := range servers {
+		addr := strings.TrimSpace(server.Addr)
+		handle := server.Handler
+		certFile := strings.TrimSpace(server.CertFile)
+		keyFile := strings.TrimSpace(server.KeyFile)
+		if addr == "" {
+			monster.CommonLog.Fatal("第" + strconv.Itoa(i) + "个server还未设置Addr")
+		}
+		if handle == nil {
+			monster.CommonLog.Fatal(addr + " 还未设置Handler")
+		}
+		var handlerFunc http.HandlerFunc = func(w http.ResponseWriter, req *http.Request) {
+			routeHandle(server, w, req)
+		}
+		httpServer := &http.Server{Addr: addr, Handler: handlerFunc}
+		if server.Prepare != nil {
+			server.Prepare(server, httpServer)
+		}
+		var listener net.Listener
+		if option, ok := optionMap[addr]; ok {
+			option.server = httpServer
+			option.vaild = true
+			listener = option.listener
+		}
+		if listener == nil {
+			//多个listener(tcp或文件描述符)监听同一个端口不会同时生效，只有一个失效下一个才自动生效
+			listen, err := net.Listen("tcp", addr)
+			if err != nil {
+				monster.CommonLog.Fatal("mvc("+addr+"): 启动失败", err)
+			}
+			optionMap[addr] = &Option{
+				listener: listen,
+				server:   httpServer,
+				vaild:    true,
+			}
+			listener = listen
+		}
+		if listener != nil {
+			go func() {
+				monster.CommonLog.Info("mvc(" + addr + "): 启动成功")
+				//不要把 server.Serve() 放在主协程里
+				if certFile != "" && keyFile != "" {
+					httpServer.ServeTLS(listener, certFile, keyFile)
+				} else {
+					httpServer.Serve(listener)
+				}
+			}()
+		}
 	}
-	//多个listener(tcp或文件描述符)监听同一个端口不会同时生效，只有一个失效下一个才自动生效
-	if err != nil {
-		core.CommonLog.Fatal("mvc("+portStr+"): 启动失败", err)
+	var files []graceful.File
+	var httpServer []*http.Server
+	for addr, item := range optionMap {
+		//没有用的 listener 就取消
+		if !item.vaild {
+			item.listener.Close()
+			monster.CommonLog.Info("mvc(" + addr + "): 关闭成功")
+			continue
+		}
+		file, fileErr := item.listener.(*net.TCPListener).File()
+		if fileErr != nil {
+			monster.CommonLog.Fatal(fileErr)
+		}
+		files = append(files, graceful.File{
+			File: file,
+			Addr: addr,
+		})
+		httpServer = append(httpServer, item.server)
 	}
-	go func() {
-		core.CommonLog.Info("mvc(" + portStr + "): 启动成功")
-		//不要把 server.Serve() 放在主协程里
-		server.Serve(listener)
-	}()
-	file, fileErr := listener.(*net.TCPListener).File()
-	if fileErr != nil {
-		core.CommonLog.Fatal(fileErr)
-	}
-	graceful.SignalHandler(file, func(ctx context.Context) {
-		server.Shutdown(ctx)
+	graceful.SignalHandler(files, func(ctx context.Context) {
+		for _, server := range httpServer {
+			server.Shutdown(ctx)
+		}
 	})
 }
 
-func routeHandle(parseRoute func(req *http.Request) (Route, error), w http.ResponseWriter, req *http.Request) {
-	if core.CurEnv == "release" {
+func routeHandle(server *Server, w http.ResponseWriter, req *http.Request) {
+	if monster.CurEnv == "release" {
 		defer func() {
 			if err := recover(); err != nil {
-				core.CommonLog.Error(req.URL.Path+":", err)
+				monster.CommonLog.Error(req.URL.Path+":", err)
 				ResponseOut(w, http.StatusInternalServerError, nil, "请求异常")
 			}
 		}()
 	}
+	interceptors := server.Interceptors
 	interceptorsLength := len(interceptors)
 	var throughoutBefore = make([]reflect.Value, interceptorsLength)
 	for i, interceptor := range interceptors {
@@ -77,14 +132,14 @@ func routeHandle(parseRoute func(req *http.Request) (Route, error), w http.Respo
 			return
 		}
 	}
-	route, err := parseRoute(req)
+	route, err := server.Handler(req)
 	if err != nil {
 		ResponseOut(w, http.StatusInternalServerError, nil, err.Error())
 		return
 	}
 	controllerName := route.ControllerName
 	methodName := route.MethodName
-	controller := core.Factory(controllerName)
+	controller := monster.Factory(controllerName)
 	if controller == nil {
 		ResponseOut(w, http.StatusInternalServerError, nil, "错误的路由")
 		return
@@ -217,7 +272,7 @@ func parseParam(req *http.Request, in reflect.Type) reflect.Value {
 	for i := 0; i < numField; i++ {
 		field := objType.Field(i)
 		fieldName := field.Name
-		fieldNameFL := core.FirstLower(fieldName)
+		fieldNameFL := monster.FirstLower(fieldName)
 		valueField := objValue.Field(i)
 		var list []interface{}
 		if strings.Index(field.Type.String(), "*multipart.FileHeader") != -1 {
@@ -301,10 +356,16 @@ func parseJson(req *http.Request, obj interface{}) bool {
 }
 
 func fitOut(w http.ResponseWriter, req *http.Request, val interface{}) {
+	var err error
 	if view, ok := val.(View); ok {
-		view.Out(w, req)
+		if outErr := view.Out(w, req); outErr != nil {
+			err = errors.New("路由函数输出错误")
+		}
 	} else {
-		ResponseOut(w, http.StatusInternalServerError, nil, "错误的路由函数输出")
+		err = errors.New("错误的路由函数输出")
+	}
+	if err != nil {
+		ResponseOut(w, http.StatusInternalServerError, nil, err.Error())
 	}
 }
 

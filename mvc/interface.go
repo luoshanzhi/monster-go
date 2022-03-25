@@ -38,5 +38,5 @@ type Interceptor interface {
 	After(w http.ResponseWriter, req *http.Request, ret reflect.Value, throughout []reflect.Value, throughoutIndex int) interface{}
 }
 type View interface {
-	Out(http.ResponseWriter, *http.Request)
+	Out(http.ResponseWriter, *http.Request) error
 }

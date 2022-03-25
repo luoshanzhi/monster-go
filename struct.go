@@ -1,4 +1,4 @@
-package core
+package monster
 
 type Setting struct {
 	Version   string

@@ -3,7 +3,7 @@ package cache
 import (
 	"errors"
 	"github.com/garyburd/redigo/redis"
-	"github.com/luoshanzhi/monster-go/core"
+	"github.com/luoshanzhi/monster-go"
 	"math/rand"
 	"strconv"
 	"time"
@@ -43,7 +43,7 @@ func SetPick(pk func(pls []*redis.Pool) (*redis.Pool, error)) {
 }
 
 func Open(connMaxLifetime time.Duration, maxOpenConns int, maxIdleConns int) {
-	rdArr := core.CurEnvConfig.Redis
+	rdArr := monster.CurEnvConfig.Redis
 	if len(rdArr) == 0 {
 		panic("缓存配置异常")
 	}
@@ -77,7 +77,7 @@ func Open(connMaxLifetime time.Duration, maxOpenConns int, maxIdleConns int) {
 	if err != nil {
 		panic(err)
 	}
-	core.CommonLog.Info("缓存: 启动成功")
+	monster.CommonLog.Info("缓存: 启动成功")
 }
 
 func Close() {
