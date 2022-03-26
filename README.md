@@ -8,6 +8,9 @@
 简单的 缓存(redis)
 ```
 
+> ### monster实战作品, 用微信扫码访问, php和go都是一套前端代码
+> php版本：![飞鲸体育][phpQrcode]　go版本：![飞鲸体育][goQrcode]
+
 > ### 1. 工厂使用 [查看demo, base.go是入口文件][demoFactory]
 
 ```go
@@ -162,3 +165,7 @@ func main() {
 [demoFactory]: https://github.com/luoshanzhi/monster-go/tree/main/demo/factory
 
 [demoMvc]: https://github.com/luoshanzhi/monster-go/tree/main/demo/mvc
+
+[phpQrcode]: https://oss.tranhn.com/phpQrcode.png
+
+[goQrcode]: https://oss.tranhn.com/goQrcode.png
