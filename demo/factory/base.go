@@ -35,16 +35,16 @@ func (the *Dog) Run() {
 
 type Common struct {
 	//下面是各种自动注入值
-	str    string   `val:"怪兽"`
-	num    int      `val:"123"`
-	bl     bool     `val:"true"`
-	numArr []int    `val:"[12,34,56,78,90]"`
-	strArr []string `val:"[\"aa\",\"bb\",\"cc\",\"dd\",\"ee\"]"`
+	str    string   `val:"怪兽"`                                   //也支持 *string
+	num    int      `val:"123"`                                  //也支持 *int
+	bl     bool     `val:"true"`                                 //也支持 *bool
+	numArr []int    `val:"[12,34,56,78,90]"`                     //也支持 *[]int
+	strArr []string `val:"[\"aa\",\"bb\",\"cc\",\"dd\",\"ee\"]"` //也支持 *[]string
 	ob     struct {
 		Age  int
 		Name string
 		Man  bool
-	} `val:"{\"age\":18,\"man\":true,\"name\":\"怪兽\"}"`
+	} `val:"{\"age\":18,\"man\":true,\"name\":\"怪兽\"}"` //也支持 *struct
 }
 
 func (the *Common) Now() string {

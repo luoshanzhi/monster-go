@@ -3,7 +3,7 @@
 ```text
 一个简单的go语言web开发框架; 
 简单的 工厂模式；
-简单的 MVC模式,支持https,支持热更新,优雅关闭服务器,
+简单的 MVC模式,支持https,请求拦截器,支持热更新,优雅关闭服务器,
 简单的 数据库(mysql主从)；
 简单的 缓存(redis)
 ```
@@ -120,10 +120,11 @@ import (
 )
 
 var factoryMap = map[string]interface{}{
-	"Bird":   (*object.Bird)(nil),
-	"Dog":    (*object.Dog)(nil),
-	"Common": (*object.Common)(nil),
-	"Json":   (*object.Json)(nil),
+	"Bird":            (*object.Bird)(nil),
+	"Dog":             (*object.Dog)(nil),
+	"Common":          (*object.Common)(nil),
+	"Json":            (*object.Json)(nil),
+	"InterceptorName": (*object.InterceptorName)(nil),
 }
 
 func handler(req *http.Request) (mvc.Route, error) {
@@ -134,7 +135,9 @@ func handler(req *http.Request) (mvc.Route, error) {
 	if len(pathRes) != 3 {
 		return route, errors.New("错误的路由")
 	}
+	// 通过url解析，到相关的控制器模块，控制器模块要先在工厂注册
 	route.ControllerName = monster.FirstUpper(pathRes[1])
+	//控制器模块对应的方法
 	route.MethodName = monster.FirstUpper(pathRes[2])
 	return route, nil
 }
@@ -149,17 +152,21 @@ func prepare(server *mvc.Server, httpServer *http.Server) {
 //http://127.0.0.1:9022/dog/run?str=a&num=1&bl=true&strArr1=bbb&strArr1=ccc&numArr1=333&numArr1=444&StrArr2=eee&StrArr2=fff&StrArr2=hhh&numArr2=123&&numArr2=456
 //http://127.0.0.1:9022/bird/upload 单个上传图片, 参数file
 //http://127.0.0.1:9022/bird/uploads 多个上传图片, 参数files
+//http://127.0.0.1:9021/bigBird/fly 只有9021端口可以调用
 func main() {
 	monster.Init(factoryMap) //初始化工厂
+	//9021端口添加一个拦截器
+	var interceptors9021 = []mvc.Interceptor{
+		monster.Factory("InterceptorName").(mvc.Interceptor),
+	}
 	mvc.Serve(
 		&mvc.Server{Addr: ":9020", Handler: handler, Prepare: prepare},
-		&mvc.Server{Addr: ":9021", Handler: handler, Prepare: prepare},
+		&mvc.Server{Addr: ":9021", Handler: handler, Prepare: prepare, Interceptors: interceptors9021},
 		&mvc.Server{Addr: ":9022", Handler: handler, Prepare: prepare},
 		//CertFile 和 KeyFile 同时不为空就是 https
 		&mvc.Server{Addr: ":9023", Handler: handler, Prepare: prepare, CertFile: "server.crt", KeyFile: "server.key"},
 	)
 }
-
 ```
 
 [demoFactory]: https://github.com/luoshanzhi/monster-go/tree/main/demo/factory

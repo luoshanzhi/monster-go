@@ -49,10 +49,12 @@ func Serve(servers ...*Server) {
 		if handle == nil {
 			monster.CommonLog.Fatal(addr + " 还未设置Handler")
 		}
-		var handlerFunc http.HandlerFunc = func(w http.ResponseWriter, req *http.Request) {
-			routeHandle(server, w, req)
+		var handlerFunc = func(server *Server) http.HandlerFunc {
+			return func(w http.ResponseWriter, req *http.Request) {
+				routeHandle(server, w, req)
+			}
 		}
-		httpServer := &http.Server{Addr: addr, Handler: handlerFunc}
+		httpServer := &http.Server{Addr: addr, Handler: handlerFunc(server)}
 		if server.Prepare != nil {
 			server.Prepare(server, httpServer)
 		}
@@ -138,6 +140,10 @@ func routeHandle(server *Server, w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	controllerName := route.ControllerName
+	if !monster.In(controllerName) {
+		ResponseOut(w, http.StatusInternalServerError, nil, "错误的路由")
+		return
+	}
 	methodName := route.MethodName
 	controller := monster.Factory(controllerName)
 	if controller == nil {

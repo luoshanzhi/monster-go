@@ -15,9 +15,9 @@ type TRACE interface{}
 type CONNECT interface{}
 
 type Interceptor interface {
-	Before(w http.ResponseWriter, req *http.Request, throughout []reflect.Value, throughoutIndex int) interface{}
-	Invoke(w http.ResponseWriter, req *http.Request, method reflect.Value, in []reflect.Value, throughout []reflect.Value, throughoutIndex int) interface{}
-	After(w http.ResponseWriter, req *http.Request, ret reflect.Value, throughout []reflect.Value, throughoutIndex int) interface{}
+	Before(w http.ResponseWriter, req *http.Request, throughout []reflect.Value, throughoutIndex int) View
+	Invoke(w http.ResponseWriter, req *http.Request, method reflect.Value, in []reflect.Value, throughout []reflect.Value, throughoutIndex int) View
+	After(w http.ResponseWriter, req *http.Request, ret reflect.Value, throughout []reflect.Value, throughoutIndex int) View
 }
 type View interface {
 	Out(http.ResponseWriter, *http.Request) error
