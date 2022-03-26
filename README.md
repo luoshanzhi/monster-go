@@ -9,7 +9,7 @@
 ```
 
 > ### monster实战作品, 用微信扫码访问, php和go都是一套前端代码
-> php版本：![飞鲸体育][phpQrcode]　go版本：![飞鲸体育][goQrcode]
+> php(之前版本)：![飞鲸体育][phpQrcode]　go(monster版本)：![飞鲸体育][goQrcode]
 
 > ### 1. 工厂使用 [查看demo, base.go是入口文件][demoFactory]
 
