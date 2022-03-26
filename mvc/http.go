@@ -173,6 +173,7 @@ func routeHandle(server *Server, w http.ResponseWriter, req *http.Request) {
 		} else if in.Kind() == reflect.Struct {
 			paramList[i] = parseParam(req, in)
 		} else {
+			//不写这句会报"reflect: Call using zero Value argument",用在 _ mvc.GET 等传参
 			paramList[i] = reflect.New(in).Elem()
 		}
 	}
@@ -244,75 +245,201 @@ func parseParam(req *http.Request, in reflect.Type) reflect.Value {
 	get := req.URL.Query() //get区取数据
 	post := req.PostForm   //post区取数据
 	file := parseFile(req) //post区上传取数据
-	setValue := func(value reflect.Value, item interface{}) {
-		switch value.Interface().(type) {
-		case string:
-			value.SetString(item.(string))
-		case int64, int32, int16, int8, int:
-			val, err := strconv.ParseInt(item.(string), 10, 64)
-			if err == nil {
-				value.SetInt(val)
+	setValue := func(value reflect.Value, type_ reflect.Type, item interface{}) {
+		newValue := value
+		if !isFile(type_) && type_.Kind() == reflect.Ptr {
+			newValue = reflect.New(type_.Elem()).Elem()
+		}
+		switch newValue.Kind() {
+		case reflect.String:
+			if val, ok := item.(string); ok {
+				newValue.Set(reflect.ValueOf(strings.TrimSpace(val)))
 			}
-		case bool:
-			val := strings.ToLower(item.(string))
-			if val == "false" {
-				value.SetBool(false)
-			} else if val == "true" {
-				value.SetBool(true)
+		case reflect.Int:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseInt(val, 10, 64); err == nil {
+					newValue.Set(reflect.ValueOf(int(val)))
+				}
 			}
-		case float64, float32:
-			val, err := strconv.ParseFloat(item.(string), 64)
-			if err == nil {
-				value.SetFloat(val)
+		case reflect.Int64:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseInt(val, 10, 64); err == nil {
+					newValue.Set(reflect.ValueOf(val))
+				}
+			}
+		case reflect.Int32:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseInt(val, 10, 32); err == nil {
+					newValue.Set(reflect.ValueOf(int32(val)))
+				}
+			}
+		case reflect.Int16:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseInt(val, 10, 16); err == nil {
+					newValue.Set(reflect.ValueOf(int16(val)))
+				}
+			}
+		case reflect.Int8:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseInt(val, 10, 8); err == nil {
+					newValue.Set(reflect.ValueOf(int8(val)))
+				}
+			}
+		case reflect.Uint:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseUint(val, 10, 64); err == nil {
+					newValue.Set(reflect.ValueOf(uint(val)))
+				}
+			}
+		case reflect.Uint64:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseUint(val, 10, 64); err == nil {
+					newValue.Set(reflect.ValueOf(val))
+				}
+			}
+		case reflect.Uint32:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseUint(val, 10, 32); err == nil {
+					newValue.Set(reflect.ValueOf(uint32(val)))
+				}
+			}
+		case reflect.Uint16:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseUint(val, 10, 16); err == nil {
+					newValue.Set(reflect.ValueOf(uint16(val)))
+				}
+			}
+		case reflect.Uint8:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseUint(val, 10, 8); err == nil {
+					newValue.Set(reflect.ValueOf(uint8(val)))
+				}
+			}
+		case reflect.Float64:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseFloat(val, 64); err == nil {
+					newValue.Set(reflect.ValueOf(val))
+				}
+			}
+		case reflect.Float32:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseFloat(val, 32); err == nil {
+					newValue.Set(reflect.ValueOf(float32(val)))
+				}
+			}
+		case reflect.Bool:
+			if val, ok := item.(string); ok {
+				val = strings.ToLower(strings.TrimSpace(val))
+				var newVal bool
+				if val == "false" {
+					newVal = false
+				} else if val == "true" {
+					newVal = true
+				}
+				newValue.Set(reflect.ValueOf(newVal))
+			}
+		case reflect.Complex128:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseComplex(val, 128); err == nil {
+					newValue.Set(reflect.ValueOf(val))
+				}
+			}
+		case reflect.Complex64:
+			if val, ok := item.(string); ok {
+				val = strings.TrimSpace(val)
+				if val, err := strconv.ParseComplex(val, 64); err == nil {
+					newValue.Set(reflect.ValueOf(complex64(val)))
+				}
 			}
 		default:
-			value.Set(reflect.ValueOf(item))
+			newValue.Set(reflect.ValueOf(item))
+		}
+		if !isFile(value.Type()) && value.Kind() == reflect.Ptr {
+			value.Set(newValue.Addr())
+		} else {
+			value.Set(newValue)
 		}
 	}
-	for i := 0; i < numField; i++ {
-		field := objType.Field(i)
-		fieldName := field.Name
-		fieldNameFL := monster.FirstLower(fieldName)
-		valueField := objValue.Field(i)
+	listFunc := func(field reflect.StructField, fieldName string) []interface{} {
 		var list []interface{}
-		if strings.Index(field.Type.String(), "*multipart.FileHeader") != -1 {
-			if files, ok := file[fieldNameFL]; ok && len(files) > 0 {
+		if isFile(field.Type) {
+			if files, ok := file[fieldName]; ok && len(files) > 0 {
 				for _, f := range files {
 					list = append(list, f)
 				}
 			}
 		} else {
-			if vals, ok := post[fieldNameFL]; ok && len(vals) > 0 {
+			if vals, ok := post[fieldName]; ok && len(vals) > 0 {
 				for _, v := range vals {
 					list = append(list, v)
 				}
-			} else if vals, ok := get[fieldNameFL]; ok && len(vals) > 0 {
+			} else if vals, ok := get[fieldName]; ok && len(vals) > 0 {
 				for _, v := range vals {
 					list = append(list, v)
 				}
 			}
 		}
+		return list
+	}
+	for i := 0; i < numField; i++ {
+		field := objType.Field(i)
+		fieldName := field.Name
+		valueField := objValue.Field(i)
+		//参数首字母小写
+		list := listFunc(field, monster.FirstLower(fieldName))
 		if len(list) == 0 {
-			continue
+			list = listFunc(field, fieldName)
+			if len(list) == 0 {
+				continue
+			}
 		}
-		switch valueField.Kind() {
+		valueType := field.Type
+		if valueType.Kind() == reflect.Ptr {
+			valueType = valueType.Elem()
+		}
+		switch valueType.Kind() {
 		case reflect.Slice, reflect.Array:
-			valueType := valueField.Type()
 			valueItemType := valueType.Elem()
+			listValue := reflect.New(valueType).Elem()
+			listLen := listValue.Len()
 			for i, item := range list {
 				newValue := reflect.New(valueItemType).Elem()
-				setValue(newValue, item)
-				if valueField.Kind() == reflect.Slice {
-					valueField.Set(reflect.Append(valueField, newValue))
-				} else if valueField.Kind() == reflect.Array {
-					valueField.Index(i).Set(newValue)
+				setValue(newValue, valueItemType, item)
+				if valueType.Kind() == reflect.Slice {
+					listValue.Set(reflect.Append(listValue, newValue))
+				} else if valueType.Kind() == reflect.Array {
+					if i <= listLen-1 {
+						listValue.Index(i).Set(newValue)
+					}
 				}
 			}
+			if valueField.Kind() == reflect.Ptr {
+				valueField.Set(listValue.Addr())
+			} else {
+				valueField.Set(listValue)
+			}
 		default:
-			setValue(valueField, list[0])
+			setValue(valueField, field.Type, list[0])
 		}
 	}
 	return objValue
+}
+
+func isFile(type_ reflect.Type) bool {
+	return strings.Index(type_.String(), "*multipart.FileHeader") != -1
 }
 
 func parseFile(req *http.Request) map[string][]*multipart.FileHeader {

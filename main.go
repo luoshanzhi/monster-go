@@ -196,13 +196,21 @@ func inject(obj interface{}) {
 				} else {
 					unsafeFieldValue.Set(reflect.ValueOf(val))
 				}
-			case reflect.Int, reflect.Int64:
+			case reflect.Int:
 				if val, err := strconv.ParseInt(val, 10, 64); err == nil {
 					newVal := int(val)
 					if unsafeFieldValue.Kind() == reflect.Ptr {
 						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
 					} else {
 						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
+				}
+			case reflect.Int64:
+				if val, err := strconv.ParseInt(val, 10, 64); err == nil {
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&val))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(val))
 					}
 				}
 			case reflect.Int32:
@@ -232,13 +240,21 @@ func inject(obj interface{}) {
 						unsafeFieldValue.Set(reflect.ValueOf(newVal))
 					}
 				}
-			case reflect.Uint, reflect.Uint64:
+			case reflect.Uint:
 				if val, err := strconv.ParseUint(val, 10, 64); err == nil {
 					newVal := uint(val)
 					if unsafeFieldValue.Kind() == reflect.Ptr {
 						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
 					} else {
 						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+					}
+				}
+			case reflect.Uint64:
+				if val, err := strconv.ParseUint(val, 10, 64); err == nil {
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&val))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(val))
 					}
 				}
 			case reflect.Uint32:
@@ -270,11 +286,10 @@ func inject(obj interface{}) {
 				}
 			case reflect.Float64:
 				if val, err := strconv.ParseFloat(val, 64); err == nil {
-					newVal := float64(val)
 					if unsafeFieldValue.Kind() == reflect.Ptr {
-						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
+						unsafeFieldValue.Set(reflect.ValueOf(&val))
 					} else {
-						unsafeFieldValue.Set(reflect.ValueOf(newVal))
+						unsafeFieldValue.Set(reflect.ValueOf(val))
 					}
 				}
 			case reflect.Float32:
@@ -295,18 +310,17 @@ func inject(obj interface{}) {
 						unsafeFieldValue.Set(reflect.ValueOf(newVal))
 					}
 				}
+			case reflect.Complex128:
+				if val, err := strconv.ParseComplex(val, 128); err == nil {
+					if unsafeFieldValue.Kind() == reflect.Ptr {
+						unsafeFieldValue.Set(reflect.ValueOf(&val))
+					} else {
+						unsafeFieldValue.Set(reflect.ValueOf(val))
+					}
+				}
 			case reflect.Complex64:
 				if val, err := strconv.ParseComplex(val, 64); err == nil {
 					newVal := complex64(val)
-					if unsafeFieldValue.Kind() == reflect.Ptr {
-						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
-					} else {
-						unsafeFieldValue.Set(reflect.ValueOf(newVal))
-					}
-				}
-			case reflect.Complex128:
-				if val, err := strconv.ParseComplex(val, 128); err == nil {
-					newVal := complex128(val)
 					if unsafeFieldValue.Kind() == reflect.Ptr {
 						unsafeFieldValue.Set(reflect.ValueOf(&newVal))
 					} else {

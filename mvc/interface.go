@@ -5,33 +5,15 @@ import (
 	"reflect"
 )
 
-type OPTIONS interface {
-	Method
-}
-type GET interface {
-	Method
-}
-type HEAD interface {
-	Method
-}
-type POST interface {
-	Method
-}
-type PUT interface {
-	Method
-}
-type DELETE interface {
-	Method
-}
-type TRACE interface {
-	Method
-}
-type CONNECT interface {
-	Method
-}
-type Method interface {
-	Method()
-}
+type OPTIONS interface{}
+type GET interface{}
+type HEAD interface{}
+type POST interface{}
+type PUT interface{}
+type DELETE interface{}
+type TRACE interface{}
+type CONNECT interface{}
+
 type Interceptor interface {
 	Before(w http.ResponseWriter, req *http.Request, throughout []reflect.Value, throughoutIndex int) interface{}
 	Invoke(w http.ResponseWriter, req *http.Request, method reflect.Value, in []reflect.Value, throughout []reflect.Value, throughoutIndex int) interface{}

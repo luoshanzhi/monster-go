@@ -19,6 +19,16 @@ type Dog struct {
 	common *Common
 }
 
+func (the *Dog) Init() {
+	//工厂模块初始化时，Init方法被调用
+	fmt.Println("Init Dog")
+}
+
+func (the *Dog) Use() {
+	//工厂模块每次使用时, Use方法被调用
+	fmt.Println("Use Dog")
+}
+
 func (the *Dog) Run() {
 	fmt.Println("running: " + the.common.Now())
 }
@@ -45,7 +55,7 @@ func (the *Common) Print() {
 	fmt.Println(the.str, the.num, the.bl, the.numArr, the.strArr, the.ob)
 }
 
-//struct 实现空 Multiton 方法就代表多例，每次工厂取出都是全新的实例
+//object 实现空 Multiton 方法就代表多例，每次工厂取出都是全新的实例
 
 var factoryMap = map[string]interface{}{
 	"Bird":   (*Bird)(nil),
