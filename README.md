@@ -8,7 +8,7 @@
 简单的 缓存(redis)
 ```
 
-1. 工厂使用 [查看demo, base.go是入口文件][demoFactory]
+> ### 1. 工厂使用 [查看demo, base.go是入口文件][demoFactory]
 
 ```go
 package main
@@ -90,12 +90,12 @@ func main() {
 输出:
 Init Dog
 Use Dog
-flying: 2022-03-26 16:37:07.403121 +0800 CST m=+0.001406368
-running: 2022-03-26 16:37:07.403492 +0800 CST m=+0.001777576
+flying: 2022-03-26 16:37:07.403121 +0800 CST m = +0.001406368
+running: 2022-03-26 16:37:07.403492 +0800 CST m = +0.001777576
 怪兽 123 true [12 34 56 78 90] [aa bb cc dd ee] {18 怪兽 true}
 ```
 
-2. MVC使用 [查看demo, base.go是入口文件][demoMvc]
+> ### 2. MVC使用 [查看demo, base.go是入口文件][demoMvc]
 
 ```text
 支持https,优雅关闭服务器,即使热更新时存在端口不同也会优雅关闭服务
