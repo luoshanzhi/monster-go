@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	_ "github.com/go-sql-driver/mysql"
@@ -20,7 +21,7 @@ var pick = func(dbType string, dbs []*sql.DB) (*sql.DB, error) {
 	if len(dbs) == 0 {
 		return nil, errors.New("dbs为空")
 	}
-	var maxCan int = -1
+	var maxCan = -1
 	var maxCanDB *sql.DB
 	uniMap := make(map[int]bool)
 	for _, item := range dbs {
@@ -49,17 +50,17 @@ func SetPick(pk func(dbType string, dbs []*sql.DB) (*sql.DB, error)) {
 	}
 }
 
-func Open(connMaxLifetime time.Duration, maxOpenConns int, maxIdleConns int) {
-	OpenMaster(connMaxLifetime, maxOpenConns, maxIdleConns)
-	OpenSlave(connMaxLifetime, maxOpenConns, maxIdleConns)
+func Open(options Options) {
+	OpenMaster(options)
+	OpenSlave(options)
 }
 
-func OpenMaster(connMaxLifetime time.Duration, maxOpenConns int, maxIdleConns int) {
-	BaseOpen("master", connMaxLifetime, maxOpenConns, maxIdleConns)
+func OpenMaster(options Options) {
+	BaseOpen("master", options)
 }
 
-func OpenSlave(connMaxLifetime time.Duration, maxOpenConns int, maxIdleConns int, args ...interface{}) {
-	BaseOpen("slave", connMaxLifetime, maxOpenConns, maxIdleConns)
+func OpenSlave(options Options) {
+	BaseOpen("slave", options)
 }
 
 func Close() {
@@ -75,7 +76,7 @@ func CloseSlave() {
 	BaseClose("slave")
 }
 
-func BaseOpen(dbType string, connMaxLifetime time.Duration, maxOpenConns int, maxIdleConns int) {
+func BaseOpen(dbType string, options Options) {
 	if dbType != "master" && dbType != "slave" {
 		panic("dbType参数错误")
 	}
@@ -101,9 +102,9 @@ func BaseOpen(dbType string, connMaxLifetime time.Duration, maxOpenConns int, ma
 			panic(err)
 		}
 		//设置<=0数，将不限制时间
-		db.SetConnMaxLifetime(connMaxLifetime)
-		db.SetMaxOpenConns(maxOpenConns)
-		db.SetMaxIdleConns(maxIdleConns)
+		db.SetConnMaxLifetime(options.ConnMaxLifetime)
+		db.SetMaxOpenConns(options.MaxOpenConns)
+		db.SetMaxIdleConns(options.MaxIdleConns)
 		err = db.Ping()
 		if err != nil {
 			panic(err)
@@ -132,6 +133,10 @@ func BaseClose(dbType string) {
 	for _, db := range dbs {
 		db.Close()
 	}
+}
+
+func DB() *sql.DB {
+	return Master()
 }
 
 func Master() *sql.DB {
@@ -167,7 +172,42 @@ func PrepareExec(handler Handler, query string, args ...interface{}) (sql.Result
 	return BaseExec(handler, true, query, args...)
 }
 
+func QueryContext(ctx context.Context, handler Handler, col interface{}, query string, args ...interface{}) error {
+	return BaseQueryContext(ctx, handler, false, col, query, args...)
+}
+
+func QueryRowContext(ctx context.Context, handler Handler, col interface{}, query string, args ...interface{}) error {
+	return BaseQueryRowContext(ctx, handler, false, col, query, args...)
+}
+
+func ExecContext(ctx context.Context, handler Handler, query string, args ...interface{}) (sql.Result, error) {
+	return BaseExecContext(ctx, handler, false, query, args...)
+}
+
+func PrepareQueryContext(ctx context.Context, handler Handler, col interface{}, query string, args ...interface{}) error {
+	return BaseQueryContext(ctx, handler, true, col, query, args...)
+}
+func PrepareQueryRowContext(ctx context.Context, handler Handler, col interface{}, query string, args ...interface{}) error {
+	return BaseQueryRowContext(ctx, handler, true, col, query, args...)
+}
+
+func PrepareExecContext(ctx context.Context, handler Handler, query string, args ...interface{}) (sql.Result, error) {
+	return BaseExecContext(ctx, handler, true, query, args...)
+}
+
 func BaseQuery(handler Handler, prepare bool, col interface{}, query string, args ...interface{}) error {
+	return BaseQueryContext(context.Background(), handler, prepare, col, query, args...)
+}
+
+func BaseQueryRow(handler Handler, prepare bool, col interface{}, query string, args ...interface{}) error {
+	return BaseQueryRowContext(context.Background(), handler, prepare, col, query, args...)
+}
+
+func BaseExec(handler Handler, prepare bool, query string, args ...interface{}) (sql.Result, error) {
+	return BaseExecContext(context.Background(), handler, prepare, query, args...)
+}
+
+func BaseQueryContext(ctx context.Context, handler Handler, prepare bool, col interface{}, query string, args ...interface{}) error {
 	if handler == nil {
 		return errors.New("handler为nil")
 	}
@@ -199,14 +239,14 @@ func BaseQuery(handler Handler, prepare bool, col interface{}, query string, arg
 	var rows *sql.Rows
 	var err error
 	if prepare {
-		stmt, pErr := handler.Prepare(query)
+		stmt, pErr := handler.PrepareContext(ctx, query)
 		if pErr != nil {
 			return pErr
 		}
 		defer stmt.Close()
 		rows, err = stmt.Query(args...)
 	} else {
-		rows, err = handler.Query(query, args...)
+		rows, err = handler.QueryContext(ctx, query, args...)
 	}
 	if err != nil {
 		return err
@@ -287,7 +327,7 @@ func BaseQuery(handler Handler, prepare bool, col interface{}, query string, arg
 	return nil
 }
 
-func BaseQueryRow(handler Handler, prepare bool, col interface{}, query string, args ...interface{}) error {
+func BaseQueryRowContext(ctx context.Context, handler Handler, prepare bool, col interface{}, query string, args ...interface{}) error {
 	colValue := reflect.ValueOf(col)
 	if colValue.Kind() != reflect.Ptr {
 		return errors.New("col不是指针")
@@ -302,7 +342,7 @@ func BaseQueryRow(handler Handler, prepare bool, col interface{}, query string, 
 	colType := colValue.Type()
 	sliceType := reflect.SliceOf(colType)
 	sliceValue := reflect.New(sliceType).Elem()
-	err := BaseQuery(handler, prepare, sliceValue.Addr().Interface(), query, args...)
+	err := BaseQueryContext(ctx, handler, prepare, sliceValue.Addr().Interface(), query, args...)
 	if err != nil {
 		return err
 	}
@@ -314,19 +354,19 @@ func BaseQueryRow(handler Handler, prepare bool, col interface{}, query string, 
 	return nil
 }
 
-func BaseExec(handler Handler, prepare bool, query string, args ...interface{}) (sql.Result, error) {
+func BaseExecContext(ctx context.Context, handler Handler, prepare bool, query string, args ...interface{}) (sql.Result, error) {
 	if handler == nil {
 		return nil, errors.New("handler为nil")
 	}
 	monster.CommonLog.Trace("sql:", query)
 	if prepare {
-		stmt, err := handler.Prepare(query)
+		stmt, err := handler.PrepareContext(ctx, query)
 		if err != nil {
 			return nil, err
 		}
 		defer stmt.Close()
 		return stmt.Exec(args...)
 	} else {
-		return handler.Exec(query, args...)
+		return handler.ExecContext(ctx, query, args...)
 	}
 }

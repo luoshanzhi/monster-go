@@ -90,7 +90,7 @@ func setLog() error {
 	AccessLog.SetLevel(level)
 	CommonLog.SetLevel(level)
 	accessLogFile := logPath + "access.log"
-	commonLogFile := logPath + "module.log"
+	commonLogFile := logPath + "common.log"
 	/* 日志轮转相关函数
 	`WithLinkName` 为最新的日志建立软连接
 	`WithRotationTime` 设置日志分割的时间，隔多久分割一次
@@ -344,7 +344,7 @@ func inject(obj interface{}) {
 func loadJson(fileName string, data interface{}) error {
 	fileName = strings.TrimSpace(fileName)
 	if !exists(fileName) {
-		return errors.New(`"` + fileName + `IsNotExist`)
+		return errors.New(`"` + fileName + `" IsNotExist`)
 	}
 	b, err := ioutil.ReadFile(fileName)
 	if err != nil {
