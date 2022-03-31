@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/luoshanzhi/monster-go"
 	"math/rand"
@@ -235,7 +236,7 @@ func BaseQueryContext(ctx context.Context, handler Handler, prepare bool, col in
 		}
 		colItemTagMap[val] = name
 	}
-	monster.CommonLog.Trace("sql:", query)
+	monster.CommonLog.Trace("sql("+fmt.Sprintf("%p", handler)+"):", query)
 	var rows *sql.Rows
 	var err error
 	if prepare {
@@ -358,7 +359,7 @@ func BaseExecContext(ctx context.Context, handler Handler, prepare bool, query s
 	if handler == nil {
 		return nil, errors.New("handler为nil")
 	}
-	monster.CommonLog.Trace("sql:", query)
+	monster.CommonLog.Trace("sql("+fmt.Sprintf("%p", handler)+"):", query)
 	if prepare {
 		stmt, err := handler.PrepareContext(ctx, query)
 		if err != nil {
