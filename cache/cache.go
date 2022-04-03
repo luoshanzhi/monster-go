@@ -42,7 +42,7 @@ func SetPick(pk func(pls []*redis.Pool) (*redis.Pool, error)) {
 	}
 }
 
-func Open(connMaxLifetime time.Duration, maxOpenConns int, maxIdleConns int) {
+func Open(options Options) {
 	rdArr := monster.CurEnvConfig.Redis
 	if len(rdArr) == 0 {
 		panic("缓存配置异常")
@@ -53,9 +53,10 @@ func Open(connMaxLifetime time.Duration, maxOpenConns int, maxIdleConns int) {
 		password := item.Password
 		port := item.Port
 		pl := &redis.Pool{
-			MaxConnLifetime: connMaxLifetime,
-			MaxActive:       maxOpenConns,
-			MaxIdle:         maxIdleConns,
+			Wait:        options.Wait,
+			IdleTimeout: options.ConnMaxLifetime,
+			MaxActive:   options.MaxOpenConns,
+			MaxIdle:     options.MaxIdleConns,
 			Dial: func() (redis.Conn, error) {
 				conn, err := redis.Dial("tcp", host+":"+strconv.Itoa(port))
 				if err != nil {
@@ -78,6 +79,26 @@ func Open(connMaxLifetime time.Duration, maxOpenConns int, maxIdleConns int) {
 		panic(err)
 	}
 	monster.CommonLog.Info("缓存: 启动成功")
+	if options.StatisticsLog {
+		statisticsLogDuration := options.StatisticsLogDuration
+		if statisticsLogDuration <= 0 {
+			statisticsLogDuration = time.Second * 5
+		}
+		go func() {
+			for {
+				stats, err := Stats()
+				if err != nil {
+					return
+				}
+				monster.StatisticsLog.
+					WithField("name", "cache").
+					WithField("use", stats.Use).
+					WithField("idle", stats.Idle).
+					Info()
+				time.Sleep(statisticsLogDuration)
+			}
+		}()
+	}
 }
 
 func Close() {
@@ -87,6 +108,7 @@ func Close() {
 	for _, pl := range pools {
 		pl.Close()
 	}
+	pools = nil
 }
 
 func Get() redis.Conn {
@@ -96,4 +118,17 @@ func Get() redis.Conn {
 		conn = pl.Get()
 	}
 	return conn
+}
+
+func Stats() (Statistics, error) {
+	var statistics Statistics
+	if len(pools) == 0 {
+		return statistics, errors.New("缓存不存在")
+	}
+	for _, pl := range pools {
+		stats := pl.Stats()
+		statistics.Use += stats.ActiveCount - stats.IdleCount
+		statistics.Idle += stats.IdleCount
+	}
+	return statistics, nil
 }

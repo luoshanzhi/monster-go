@@ -29,6 +29,7 @@ var (
 	SettingConfig Setting
 	CurEnv        string //dev,beta,release
 	CurEnvConfig  EnvConfig
+	StatisticsLog = logrus.New()
 	AccessLog     = logrus.New()
 	CommonLog     = logrus.New()
 	logLevel      string
@@ -87,8 +88,10 @@ func setLog() error {
 	if levelErr != nil {
 		return levelErr
 	}
+	StatisticsLog.SetLevel(level)
 	AccessLog.SetLevel(level)
 	CommonLog.SetLevel(level)
+	statisticsLogFile := logPath + "statistics.log"
 	accessLogFile := logPath + "access.log"
 	commonLogFile := logPath + "common.log"
 	/* 日志轮转相关函数
@@ -99,16 +102,19 @@ func setLog() error {
 	`WithRotationCount` 设置文件清理前最多保存的个数
 	*/
 	// 下面配置日志每隔2小时轮转一个新文件，保留最近12个日志文件，多余的自动清理掉。
-	set := func(logger *logrus.Logger, path string) {
+	set := func(logger *logrus.Logger, path string, formatter logrus.Formatter) {
 		writer, _ := rotatelogs.New(
 			path+".%Y%m%d%H%M",
 			rotatelogs.WithLinkName(path),
 			rotatelogs.WithRotationCount(12),
 			rotatelogs.WithRotationTime(time.Duration(120)*time.Minute),
 		)
-		logger.SetFormatter(&logrus.TextFormatter{
-			TimestampFormat: "2006-01-02 15:04:05",
-		})
+		if formatter == nil {
+			formatter = &logrus.TextFormatter{
+				TimestampFormat: "2006-01-02 15:04:05",
+			}
+		}
+		logger.SetFormatter(formatter)
 		var writers []io.Writer
 		writers = append(writers, writer)
 		if CurEnv == "dev" {
@@ -118,8 +124,11 @@ func setLog() error {
 		multiWriter := io.MultiWriter(writers...)
 		logger.SetOutput(multiWriter)
 	}
-	set(AccessLog, accessLogFile)
-	set(CommonLog, commonLogFile)
+	set(StatisticsLog, statisticsLogFile, &logrus.JSONFormatter{
+		TimestampFormat: "2006-01-02 15:04:05",
+	})
+	set(AccessLog, accessLogFile, nil)
+	set(CommonLog, commonLogFile, nil)
 	return nil
 }
 

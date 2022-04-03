@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -98,7 +99,15 @@ func BaseOpen(dbType string, options Options) {
 		password := item.Password
 		dBase := item.Database
 		port := item.Port
-		db, err := sql.Open("mysql", user+":"+password+"@tcp("+host+":"+strconv.Itoa(port)+")/"+dBase)
+		charset := strings.TrimSpace(options.Charset)
+		interpolateParams := ""
+		if charset == "" {
+			charset = "utf8"
+		}
+		if options.InterpolateParams {
+			interpolateParams = "&interpolateParams=true"
+		}
+		db, err := sql.Open("mysql", user+":"+password+"@tcp("+host+":"+strconv.Itoa(port)+")/"+dBase+"?charset="+charset+interpolateParams)
 		if err != nil {
 			panic(err)
 		}
@@ -119,6 +128,26 @@ func BaseOpen(dbType string, options Options) {
 		slaves = dbs
 		monster.CommonLog.Info("数据库: 从库启动成功")
 	}
+	if options.StatisticsLog {
+		statisticsLogDuration := options.StatisticsLogDuration
+		if statisticsLogDuration <= 0 {
+			statisticsLogDuration = time.Second * 5
+		}
+		go func() {
+			for {
+				stats, err := BaseStats(dbType)
+				if err != nil {
+					return
+				}
+				monster.StatisticsLog.
+					WithField("name", "database-"+dbType).
+					WithField("use", stats.Use).
+					WithField("idle", stats.Idle).
+					Info()
+				time.Sleep(statisticsLogDuration)
+			}
+		}()
+	}
 }
 
 func BaseClose(dbType string) {
@@ -134,6 +163,55 @@ func BaseClose(dbType string) {
 	for _, db := range dbs {
 		db.Close()
 	}
+	if dbType == "master" {
+		masters = nil
+	} else if dbType == "slave" {
+		slaves = nil
+	}
+}
+
+func Stats() (Statistics, error) {
+	var statistics Statistics
+	masterStats, masterErr := MasterStats()
+	if masterErr != nil {
+		return statistics, masterErr
+	}
+	slaveStats, slaveErr := SlaveStats()
+	if slaveErr != nil {
+		return statistics, slaveErr
+	}
+	statistics.Use += masterStats.Use
+	statistics.Idle += masterStats.Idle
+	statistics.Use += slaveStats.Use
+	statistics.Idle += slaveStats.Idle
+	return statistics, nil
+}
+
+func MasterStats() (Statistics, error) {
+	return BaseStats("master")
+}
+
+func SlaveStats() (Statistics, error) {
+	return BaseStats("slave")
+}
+
+func BaseStats(dbType string) (Statistics, error) {
+	var statistics Statistics
+	var dbs []*sql.DB
+	if dbType == "master" {
+		dbs = masters
+	} else if dbType == "slave" {
+		dbs = slaves
+	}
+	if len(dbs) == 0 {
+		return statistics, errors.New("数据库不存在")
+	}
+	for _, db := range dbs {
+		stats := db.Stats()
+		statistics.Use += stats.InUse
+		statistics.Idle += stats.Idle
+	}
+	return statistics, nil
 }
 
 func DB() *sql.DB {

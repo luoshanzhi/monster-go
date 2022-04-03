@@ -1,10 +1,9 @@
-package database
+package cache
 
 import "time"
 
 type Options struct {
-	Charset               string        //字符集,默认utf8
-	InterpolateParams     bool          //默认false, 所有带参数(?)的sql都被转成Stmt(预处理); true，参数(?)将被简单的escape防止注入
+	Wait                  bool          //超出最大使用是否阻塞等待
 	ConnMaxLifetime       time.Duration //保存的空闲连接最大存活时间
 	MaxOpenConns          int           //最大打开连接
 	MaxIdleConns          int           //最大保存多少空闲连接
