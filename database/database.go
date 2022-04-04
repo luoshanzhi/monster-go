@@ -395,68 +395,68 @@ func colAppend(rows *sql.Rows, colValueElem reflect.Value, colItemType reflect.T
 		return columnErr
 	}
 	newValue := reflect.New(colItemType).Elem()
-	var dest []interface{}
-	var destColumn []string
-	for _, column := range columns {
+	length := len(columns)
+	dest := make([]interface{}, length)
+	destColumn := make([]string, length)
+	for i, column := range columns {
 		if name, ok := colItemTagMap[column]; ok {
 			column = name
 		} else {
 			//字段没设置tag,就按首字母大写找字段
 			column = monster.FirstUpper(column)
 		}
-		if _, ok := colItemType.FieldByName(column); ok {
-			colField := newValue.FieldByName(column)
-			addr := colField.Addr().Interface()
-			//防止数据库字段null出错
-			switch colField.Interface().(type) {
-			case string:
-				addr = &sql.NullString{}
-			case int, int64:
-				addr = &sql.NullInt64{}
-			case int32:
-				addr = &sql.NullInt32{}
-			case int16:
-				addr = &sql.NullInt16{}
-			case float32, float64:
-				addr = &sql.NullFloat64{}
-			case bool:
-				addr = &sql.NullBool{}
-			case time.Time:
-				addr = &sql.NullTime{}
-			case byte:
-				addr = &sql.NullByte{}
-			}
-			dest = append(dest, addr)
-			destColumn = append(destColumn, column)
+		if _, ok := colItemType.FieldByName(column); !ok {
+			return errors.New(column + " is not in col")
 		}
+		colField := newValue.FieldByName(column)
+		var addr interface{}
+		//防止数据库字段null出错
+		switch colField.Interface().(type) {
+		case string:
+			addr = &sql.NullString{}
+		case int, int64:
+			addr = &sql.NullInt64{}
+		case int32:
+			addr = &sql.NullInt32{}
+		case int16:
+			addr = &sql.NullInt16{}
+		case float32, float64:
+			addr = &sql.NullFloat64{}
+		case bool:
+			addr = &sql.NullBool{}
+		case time.Time:
+			addr = &sql.NullTime{}
+		case byte:
+			addr = &sql.NullByte{}
+		default:
+			return errors.New("colField type error")
+		}
+		dest[i] = addr
+		destColumn[i] = column
 	}
 	err := rows.Scan(dest...)
 	if err != nil {
 		return err
 	}
 	for i, column := range destColumn {
-		if _, ok := colItemType.FieldByName(column); ok {
-			colField := newValue.FieldByName(column)
-			destValue := reflect.ValueOf(dest[i])
-			destObj := destValue.Elem().Interface()
-			switch obj := destObj.(type) {
-			case sql.NullString:
-				colField.SetString(obj.String)
-			case sql.NullInt64:
-				colField.SetInt(obj.Int64)
-			case sql.NullInt32:
-				colField.SetInt(int64(obj.Int32))
-			case sql.NullInt16:
-				colField.SetInt(int64(obj.Int16))
-			case sql.NullFloat64:
-				colField.SetFloat(obj.Float64)
-			case sql.NullBool:
-				colField.SetBool(obj.Bool)
-			case sql.NullTime:
-				colField.Set(reflect.ValueOf(obj.Time))
-			case sql.NullByte:
-				colField.Set(reflect.ValueOf(obj.Byte))
-			}
+		colField := newValue.FieldByName(column)
+		switch obj := dest[i].(type) {
+		case *sql.NullString:
+			colField.SetString(obj.String)
+		case *sql.NullInt64:
+			colField.SetInt(obj.Int64)
+		case *sql.NullInt32:
+			colField.SetInt(int64(obj.Int32))
+		case *sql.NullInt16:
+			colField.SetInt(int64(obj.Int16))
+		case *sql.NullFloat64:
+			colField.SetFloat(obj.Float64)
+		case *sql.NullBool:
+			colField.SetBool(obj.Bool)
+		case *sql.NullTime:
+			colField.Set(reflect.ValueOf(obj.Time))
+		case *sql.NullByte:
+			colField.Set(reflect.ValueOf(obj.Byte))
 		}
 	}
 	if colValueElem.Kind() == reflect.Slice {
