@@ -169,9 +169,220 @@ func main() {
 }
 ```
 
+> ### 3. 数据库使用 [查看demo, base.go是入口文件][demoDatabase]
+
+```text
+支持数据库查询绑定到对象，数据库事务
+```
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+	"github.com/luoshanzhi/monster-go"
+	"github.com/luoshanzhi/monster-go/database"
+	"strconv"
+	"time"
+)
+
+type Common struct {
+}
+
+var factoryMap = map[string]interface{}{
+	"Common": (*Common)(nil),
+}
+
+func doSql(handler database.Handler) error {
+	//database.Handler 满足 sql.DB 和 sql.Conn 和 sql.Tx, 所以下面的 handler都可以
+	
+	//执行sql：用在 insert,update,delete 等等...
+	result, execErr := database.Exec(handler, "update t_user set nickName='怪兽 "+strconv.Itoa(int(time.Now().Unix()))+"' where userId=? limit 1", 1)
+	rowsAffected, _ := result.RowsAffected()
+	fmt.Println(rowsAffected, execErr)
+
+	//查询多条
+	var userList []struct {
+		UserId   int    //如果没设置tag,就按首字母大写映射到字段
+		UserName string `db:"nickName"` //指定字段映射到该字段
+	}
+	listErr := database.Query(handler, &userList, "select userId,nickName from t_user order by userId asc limit 1")
+	fmt.Println(userList, listErr)
+
+	//查询单条
+	var userInfo struct {
+		UserId   int
+		NickName string
+	}
+	infoErr := database.QueryRow(handler, &userInfo, "select userId,nickName from t_user where userId=?", 1)
+	fmt.Println(userInfo, infoErr)
+
+	if execErr != nil || listErr != nil || infoErr != nil {
+		return errors.New("出现错误")
+	}
+	return nil
+}
+
+func main() {
+	monster.SetSettingFile(monster.RootPath + "setting.json")
+	monster.Init(factoryMap) //初始化工厂
+	defer database.Close()
+	database.Open(database.Options{
+		ConnMaxLifetime: time.Minute * 3, //保存的空闲连接,最大存活3分钟就释放掉
+		MaxOpenConns:    10,              //连接池,最大打开10连接,超过阻塞等待
+		MaxIdleConns:    5,               //连接池,最大保存5个空闲连接
+		//StatisticsLog:   true,            //开启统计日志, 记录连接池的基本状态, 文件: log/statistics.log
+	})
+
+	//database.Handler 满足 sql.DB 和 sql.Conn 和 sql.Tx, 所以下面的 handler都可以
+	
+	//sql.DB版本
+	db := database.DB()
+	doSql(db)
+
+	//sql.Conn版本
+	//sql.Conn 和 sql.DB区别在于 sql.Conn自己释放回连接池, 用在http服务里和 http.Request 上下文绑定就比较合理
+	/*ctx := context.Background()
+	conn, err := database.DB().Conn(ctx)
+	if err != nil {
+		panic(err)
+	}
+	doSql(conn)
+	conn.Close()*/
+
+	//sql.Tx版本(事务)
+	/*db := database.DB()
+	tx, err := db.Begin()
+	if err != nil {
+		panic(err)
+	}
+	doErr := doSql(tx)
+	if doErr != nil {
+		tx.Rollback()
+	}
+	commitErr := tx.Commit()
+	fmt.Println(commitErr)*/
+}
+```
+
+> ### 4. 缓存使用 [查看demo, base.go是入口文件][demoCache]
+
+```text
+支持简单缓存,只简单封装了: GET,SET,EXISTS,DEL,KEYS,TTL
+有需要的，自己可以获取conn, 自定义封装
+```
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/luoshanzhi/monster-go"
+	"github.com/luoshanzhi/monster-go/cache"
+	"time"
+)
+
+type Common struct {
+}
+
+var factoryMap = map[string]interface{}{
+	"Common": (*Common)(nil),
+}
+
+func main() {
+	monster.SetSettingFile(monster.RootPath + "setting.json")
+	monster.Init(factoryMap) //初始化工厂
+	defer cache.Close()
+	cache.Open(cache.Options{
+		ConnMaxLifetime: time.Minute * 3, //保存的空闲连接,最大存活3分钟就释放掉
+		MaxOpenConns:    10,              //连接池,最大打开10连接,超过阻塞等待
+		MaxIdleConns:    10,              //连接池,最大保存5个空闲连接
+		//StatisticsLog:   true,            //开启统计日志, 记录连接池的基本状态, 文件: log/statistics.log
+	})
+	type User struct {
+		UserId   int
+		NickName string
+	}
+	conn := cache.Conn()
+	defer conn.Close()
+	user1 := User{
+		UserId:   1,
+		NickName: "怪兽",
+	}
+	key := "user"
+
+	//设置缓存, timeout(单位:秒) <=0 不限制时间
+	setErr := cache.Set(conn, key, user1, 5)
+	if setErr != nil {
+		panic(setErr)
+	}
+	fmt.Println("缓存设置成功")
+
+	//判断缓存是否存在
+	exists, existsErr := cache.Exists(conn, key)
+	if existsErr != nil {
+		panic(existsErr)
+	}
+	fmt.Println("存在: ", exists)
+
+	//查询目前缓存key: * 代表查询所有
+	keys, keysErr := cache.Keys(conn, "us*")
+	if keysErr != nil {
+		panic(keysErr)
+	}
+	fmt.Println("keys: ", keys)
+
+	//查询key的ttl(Time To Live, 生存时间值)
+	seconds, ttlErr := cache.Ttl(conn, "user")
+	if ttlErr != nil {
+		panic(ttlErr)
+	}
+	fmt.Println("seconds: ", seconds)
+
+	//读取缓存
+	var user2 User
+	getErr := cache.Get(conn, key, &user2)
+	if getErr != nil {
+		panic(getErr)
+	}
+	fmt.Println(user2)
+
+	//睡眠5秒，等待缓存user超时被删除
+	//time.Sleep(time.Second * 5)
+
+	//删除缓存
+	delErr := cache.Del(conn, key)
+	if delErr != nil {
+		panic(delErr)
+	}
+	fmt.Println("缓存删除成功")
+
+	//判断缓存是否存在
+	exists, existsErr = cache.Exists(conn, key)
+	if existsErr != nil {
+		panic(existsErr)
+	}
+	fmt.Println("存在: ", exists)
+}
+
+输出:
+缓存设置成功
+存在:  true
+keys:  [user]
+seconds:  5
+{1 怪兽}
+缓存删除成功
+存在:  false
+```
+
 [demoFactory]: https://github.com/luoshanzhi/monster-go/tree/main/demo/factory
 
 [demoMvc]: https://github.com/luoshanzhi/monster-go/tree/main/demo/mvc
+
+[demoDatabase]: https://github.com/luoshanzhi/monster-go/tree/main/demo/database
+
+[demoCache]: https://github.com/luoshanzhi/monster-go/tree/main/demo/cache
 
 [phpQrcode]: https://oss.tranhn.com/phpQrcode.png
 

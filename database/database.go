@@ -18,10 +18,10 @@ var masters []*sql.DB
 var slaves []*sql.DB
 var pick = func(dbType string, dbs []*sql.DB) (*sql.DB, error) {
 	if dbType != "master" && dbType != "slave" {
-		return nil, errors.New("dbType参数错误")
+		return nil, errors.New("dbType error")
 	}
 	if len(dbs) == 0 {
-		return nil, errors.New("dbs为空")
+		return nil, errors.New("dbs len is 0")
 	}
 	var maxCan = -1
 	var maxCanDB *sql.DB
@@ -80,7 +80,7 @@ func CloseSlave() {
 
 func BaseOpen(dbType string, options Options) {
 	if dbType != "master" && dbType != "slave" {
-		panic("dbType参数错误")
+		panic("dbType error")
 	}
 	mysqlConfig := monster.CurEnvConfig.Mysql
 	var dbArr []monster.MysqlSettingItem
@@ -90,7 +90,7 @@ func BaseOpen(dbType string, options Options) {
 		dbArr = mysqlConfig.Slave
 	}
 	if len(dbArr) == 0 {
-		panic("数据库配置异常")
+		panic("config error")
 	}
 	var dbs []*sql.DB
 	for _, item := range dbArr {
@@ -152,7 +152,7 @@ func BaseOpen(dbType string, options Options) {
 
 func BaseClose(dbType string) {
 	if dbType != "master" && dbType != "slave" {
-		panic("dbType参数错误")
+		panic("dbType error")
 	}
 	var dbs []*sql.DB
 	if dbType == "master" {
@@ -204,7 +204,7 @@ func BaseStats(dbType string) (Statistics, error) {
 		dbs = slaves
 	}
 	if len(dbs) == 0 {
-		return statistics, errors.New("数据库不存在")
+		return statistics, errors.New("dbs len is 0")
 	}
 	for _, db := range dbs {
 		stats := db.Stats()
@@ -229,81 +229,153 @@ func Slave() *sql.DB {
 }
 
 func Query(handler Handler, col interface{}, query string, args ...interface{}) error {
-	return BaseQuery(handler, false, col, query, args...)
+	return QueryContext(context.Background(), handler, col, query, args...)
 }
 
 func QueryRow(handler Handler, col interface{}, query string, args ...interface{}) error {
-	return BaseQueryRow(handler, false, col, query, args...)
+	return QueryRowContext(context.Background(), handler, col, query, args...)
 }
 
 func Exec(handler Handler, query string, args ...interface{}) (sql.Result, error) {
-	return BaseExec(handler, false, query, args...)
+	return ExecContext(context.Background(), handler, query, args...)
 }
 
-func PrepareQuery(handler Handler, col interface{}, query string, args ...interface{}) error {
-	return BaseQuery(handler, true, col, query, args...)
-}
-func PrepareQueryRow(handler Handler, col interface{}, query string, args ...interface{}) error {
-	return BaseQueryRow(handler, true, col, query, args...)
-}
-
-func PrepareExec(handler Handler, query string, args ...interface{}) (sql.Result, error) {
-	return BaseExec(handler, true, query, args...)
+func Prepare(handler Handler, query string) (*sql.Stmt, error) {
+	return PrepareContext(context.Background(), handler, query)
 }
 
 func QueryContext(ctx context.Context, handler Handler, col interface{}, query string, args ...interface{}) error {
-	return BaseQueryContext(ctx, handler, false, col, query, args...)
+	if handler == nil {
+		return errors.New("handler is nil")
+	}
+	colValueElem, colItemType, colItemTagMap, reflectErr := colReflect(col)
+	if reflectErr != nil {
+		return reflectErr
+	}
+	monster.CommonLog.Trace("sql("+fmt.Sprintf("%p", handler)+"):", query)
+	rows, err := handler.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		appendErr := colAppend(rows, colValueElem, colItemType, colItemTagMap)
+		if appendErr != nil {
+			return appendErr
+		}
+	}
+	return nil
 }
 
 func QueryRowContext(ctx context.Context, handler Handler, col interface{}, query string, args ...interface{}) error {
-	return BaseQueryRowContext(ctx, handler, false, col, query, args...)
+	if handler == nil {
+		return errors.New("handler is nil")
+	}
+	colValueElem, colItemType, colItemTagMap, reflectErr := colReflect(col)
+	if reflectErr != nil {
+		return reflectErr
+	}
+	monster.CommonLog.Trace("sql("+fmt.Sprintf("%p", handler)+"):", query)
+	rows, err := handler.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		appendErr := colAppend(rows, colValueElem, colItemType, colItemTagMap)
+		if appendErr != nil {
+			return appendErr
+		}
+	} else {
+		return errors.New("not exists")
+	}
+	return nil
 }
 
 func ExecContext(ctx context.Context, handler Handler, query string, args ...interface{}) (sql.Result, error) {
-	return BaseExecContext(ctx, handler, false, query, args...)
-}
-
-func PrepareQueryContext(ctx context.Context, handler Handler, col interface{}, query string, args ...interface{}) error {
-	return BaseQueryContext(ctx, handler, true, col, query, args...)
-}
-func PrepareQueryRowContext(ctx context.Context, handler Handler, col interface{}, query string, args ...interface{}) error {
-	return BaseQueryRowContext(ctx, handler, true, col, query, args...)
-}
-
-func PrepareExecContext(ctx context.Context, handler Handler, query string, args ...interface{}) (sql.Result, error) {
-	return BaseExecContext(ctx, handler, true, query, args...)
-}
-
-func BaseQuery(handler Handler, prepare bool, col interface{}, query string, args ...interface{}) error {
-	return BaseQueryContext(context.Background(), handler, prepare, col, query, args...)
-}
-
-func BaseQueryRow(handler Handler, prepare bool, col interface{}, query string, args ...interface{}) error {
-	return BaseQueryRowContext(context.Background(), handler, prepare, col, query, args...)
-}
-
-func BaseExec(handler Handler, prepare bool, query string, args ...interface{}) (sql.Result, error) {
-	return BaseExecContext(context.Background(), handler, prepare, query, args...)
-}
-
-func BaseQueryContext(ctx context.Context, handler Handler, prepare bool, col interface{}, query string, args ...interface{}) error {
 	if handler == nil {
-		return errors.New("handler为nil")
+		return nil, errors.New("handler is nil")
 	}
+	monster.CommonLog.Trace("sql("+fmt.Sprintf("%p", handler)+"):", query)
+	return handler.ExecContext(ctx, query, args...)
+}
+
+func PrepareContext(ctx context.Context, handler Handler, query string) (*sql.Stmt, error) {
+	monster.CommonLog.Trace("sql("+fmt.Sprintf("%p", handler)+"):", query)
+	return handler.PrepareContext(ctx, query)
+}
+
+func StmtQueryContext(ctx context.Context, stmt *sql.Stmt, col interface{}, args ...interface{}) error {
+	if stmt == nil {
+		return errors.New("stmt is nil")
+	}
+	colValueElem, colItemType, colItemTagMap, reflectErr := colReflect(col)
+	if reflectErr != nil {
+		return reflectErr
+	}
+	rows, err := stmt.QueryContext(ctx, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		appendErr := colAppend(rows, colValueElem, colItemType, colItemTagMap)
+		if appendErr != nil {
+			return appendErr
+		}
+	}
+	return nil
+}
+
+func StmtQueryRowContext(ctx context.Context, stmt *sql.Stmt, col interface{}, args ...interface{}) error {
+	if stmt == nil {
+		return errors.New("stmt is nil")
+	}
+	colValueElem, colItemType, colItemTagMap, reflectErr := colReflect(col)
+	if reflectErr != nil {
+		return reflectErr
+	}
+	rows, err := stmt.QueryContext(ctx, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		appendErr := colAppend(rows, colValueElem, colItemType, colItemTagMap)
+		if appendErr != nil {
+			return appendErr
+		}
+	} else {
+		return errors.New("not exists")
+	}
+	return nil
+}
+
+func StmtExecContext(ctx context.Context, stmt *sql.Stmt, args ...interface{}) (sql.Result, error) {
+	return stmt.ExecContext(ctx, args...)
+}
+
+func colReflect(col interface{}) (colValueElem reflect.Value, colItemType reflect.Type, colItemTagMap map[string]string, err error) {
 	colValue := reflect.ValueOf(col)
 	if colValue.Kind() != reflect.Ptr {
-		return errors.New("col不是指针")
+		err = errors.New("col is not ptr")
+		return
 	}
 	if colValue.IsNil() {
-		return errors.New("col等于nil")
+		err = errors.New("col is nil")
+		return
 	}
-	colValueElem := colValue.Elem()
-	//获取切片里面item类型
-	colItemType := colValueElem.Type().Elem()
+	colValueElem = colValue.Elem()
+	colItemType = colValueElem.Type()
+	if colValueElem.Kind() == reflect.Slice {
+		//获取切片里面item类型
+		colItemType = colItemType.Elem()
+	}
 	if colItemType.Kind() != reflect.Struct {
-		return errors.New("col里的item不是结构体")
+		err = errors.New("col->item is not struct")
+		return
 	}
-	colItemTagMap := make(map[string]string)
+	colItemTagMap = make(map[string]string)
 	colItemNumField := colItemType.NumField()
 	for i := 0; i < colItemNumField; i++ {
 		field := colItemType.Field(i)
@@ -314,138 +386,83 @@ func BaseQueryContext(ctx context.Context, handler Handler, prepare bool, col in
 		}
 		colItemTagMap[val] = name
 	}
-	monster.CommonLog.Trace("sql("+fmt.Sprintf("%p", handler)+"):", query)
-	var rows *sql.Rows
-	var err error
-	if prepare {
-		stmt, pErr := handler.PrepareContext(ctx, query)
-		if pErr != nil {
-			return pErr
-		}
-		defer stmt.Close()
-		rows, err = stmt.Query(args...)
-	} else {
-		rows, err = handler.QueryContext(ctx, query, args...)
+	return
+}
+
+func colAppend(rows *sql.Rows, colValueElem reflect.Value, colItemType reflect.Type, colItemTagMap map[string]string) error {
+	columns, columnErr := rows.Columns()
+	if columnErr != nil {
+		return columnErr
 	}
+	newValue := reflect.New(colItemType).Elem()
+	var dest []interface{}
+	var destColumn []string
+	for _, column := range columns {
+		if name, ok := colItemTagMap[column]; ok {
+			column = name
+		} else {
+			//字段没设置tag,就按首字母大写找字段
+			column = monster.FirstUpper(column)
+		}
+		if _, ok := colItemType.FieldByName(column); ok {
+			colField := newValue.FieldByName(column)
+			addr := colField.Addr().Interface()
+			//防止数据库字段null出错
+			switch colField.Interface().(type) {
+			case string:
+				addr = &sql.NullString{}
+			case int, int64:
+				addr = &sql.NullInt64{}
+			case int32:
+				addr = &sql.NullInt32{}
+			case int16:
+				addr = &sql.NullInt16{}
+			case float32, float64:
+				addr = &sql.NullFloat64{}
+			case bool:
+				addr = &sql.NullBool{}
+			case time.Time:
+				addr = &sql.NullTime{}
+			case byte:
+				addr = &sql.NullByte{}
+			}
+			dest = append(dest, addr)
+			destColumn = append(destColumn, column)
+		}
+	}
+	err := rows.Scan(dest...)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		columns, columnErr := rows.Columns()
-		if columnErr != nil {
-			return columnErr
-		}
-		newValue := reflect.New(colItemType).Elem()
-		var dest []interface{}
-		var destColumn []string
-		for _, column := range columns {
-			if name, ok := colItemTagMap[column]; ok {
-				column = name
-			} else {
-				//字段没设置tag,就按首字母大写找字段
-				column = monster.FirstUpper(column)
-			}
-			if _, ok := colItemType.FieldByName(column); ok {
-				colField := newValue.FieldByName(column)
-				addr := colField.Addr().Interface()
-				//防止数据库字段null出错
-				switch colField.Interface().(type) {
-				case string:
-					addr = &sql.NullString{}
-				case int, int64:
-					addr = &sql.NullInt64{}
-				case int32:
-					addr = &sql.NullInt32{}
-				case int16:
-					addr = &sql.NullInt16{}
-				case float32, float64:
-					addr = &sql.NullFloat64{}
-				case bool:
-					addr = &sql.NullBool{}
-				case time.Time:
-					addr = &sql.NullTime{}
-				case byte:
-					addr = &sql.NullByte{}
-				}
-				dest = append(dest, addr)
-				destColumn = append(destColumn, column)
+	for i, column := range destColumn {
+		if _, ok := colItemType.FieldByName(column); ok {
+			colField := newValue.FieldByName(column)
+			destValue := reflect.ValueOf(dest[i])
+			destObj := destValue.Elem().Interface()
+			switch obj := destObj.(type) {
+			case sql.NullString:
+				colField.SetString(obj.String)
+			case sql.NullInt64:
+				colField.SetInt(obj.Int64)
+			case sql.NullInt32:
+				colField.SetInt(int64(obj.Int32))
+			case sql.NullInt16:
+				colField.SetInt(int64(obj.Int16))
+			case sql.NullFloat64:
+				colField.SetFloat(obj.Float64)
+			case sql.NullBool:
+				colField.SetBool(obj.Bool)
+			case sql.NullTime:
+				colField.Set(reflect.ValueOf(obj.Time))
+			case sql.NullByte:
+				colField.Set(reflect.ValueOf(obj.Byte))
 			}
 		}
-		err := rows.Scan(dest...)
-		if err != nil {
-			return err
-		}
-		for i, column := range destColumn {
-			if _, ok := colItemType.FieldByName(column); ok {
-				colField := newValue.FieldByName(column)
-				destValue := reflect.ValueOf(dest[i])
-				destObj := destValue.Elem().Interface()
-				switch obj := destObj.(type) {
-				case sql.NullString:
-					colField.SetString(obj.String)
-				case sql.NullInt64:
-					colField.SetInt(obj.Int64)
-				case sql.NullInt32:
-					colField.SetInt(int64(obj.Int32))
-				case sql.NullInt16:
-					colField.SetInt(int64(obj.Int16))
-				case sql.NullFloat64:
-					colField.SetFloat(obj.Float64)
-				case sql.NullBool:
-					colField.SetBool(obj.Bool)
-				case sql.NullTime:
-					colField.Set(reflect.ValueOf(obj.Time))
-				case sql.NullByte:
-					colField.Set(reflect.ValueOf(obj.Byte))
-				}
-			}
-		}
+	}
+	if colValueElem.Kind() == reflect.Slice {
 		colValueElem.Set(reflect.Append(colValueElem, newValue))
+	} else {
+		colValueElem.Set(newValue)
 	}
 	return nil
-}
-
-func BaseQueryRowContext(ctx context.Context, handler Handler, prepare bool, col interface{}, query string, args ...interface{}) error {
-	colValue := reflect.ValueOf(col)
-	if colValue.Kind() != reflect.Ptr {
-		return errors.New("col不是指针")
-	}
-	if colValue.IsNil() {
-		return errors.New("col等于nil")
-	}
-	colValue = colValue.Elem()
-	if colValue.Kind() != reflect.Struct {
-		return errors.New("col不是结构体")
-	}
-	colType := colValue.Type()
-	sliceType := reflect.SliceOf(colType)
-	sliceValue := reflect.New(sliceType).Elem()
-	err := BaseQueryContext(ctx, handler, prepare, sliceValue.Addr().Interface(), query, args...)
-	if err != nil {
-		return err
-	}
-	if sliceValue.Len() > 0 {
-		colValue.Set(sliceValue.Index(0))
-	} else {
-		return errors.New("数据不存在")
-	}
-	return nil
-}
-
-func BaseExecContext(ctx context.Context, handler Handler, prepare bool, query string, args ...interface{}) (sql.Result, error) {
-	if handler == nil {
-		return nil, errors.New("handler为nil")
-	}
-	monster.CommonLog.Trace("sql("+fmt.Sprintf("%p", handler)+"):", query)
-	if prepare {
-		stmt, err := handler.PrepareContext(ctx, query)
-		if err != nil {
-			return nil, err
-		}
-		defer stmt.Close()
-		return stmt.Exec(args...)
-	} else {
-		return handler.ExecContext(ctx, query, args...)
-	}
 }
