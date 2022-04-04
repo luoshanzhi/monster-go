@@ -20,7 +20,7 @@ import (
 
 var (
 	factoryMap      map[string]interface{}
-	factoryMapGuard sync.Mutex
+	factoryMapGuard sync.RWMutex
 	RootPath        string
 	Args            struct {
 		Path     string
@@ -165,12 +165,12 @@ func inject(obj interface{}) {
 	}
 	typeMap := make(map[reflect.Type]string)
 	//防止并发遍历map异常
-	factoryMapGuard.Lock()
+	factoryMapGuard.RLock()
 	for key, val := range factoryMap {
 		oType := reflect.TypeOf(val)
 		typeMap[oType] = key
 	}
-	factoryMapGuard.Unlock()
+	factoryMapGuard.RUnlock()
 	objType = objType.Elem()
 	objValue = objValue.Elem()
 	numField := objValue.NumField()
@@ -373,9 +373,9 @@ func exists(path string) bool {
 
 func In(name string) bool {
 	//防止并发写map异常
-	factoryMapGuard.Lock()
+	factoryMapGuard.RLock()
 	_, ok := factoryMap[name]
-	factoryMapGuard.Unlock()
+	factoryMapGuard.RUnlock()
 	return ok
 }
 
@@ -384,9 +384,9 @@ func Factory(name string, args ...interface{}) interface{} {
 		panic(errors.New("工厂不存在" + name))
 	}
 	//防止并发写map异常
-	factoryMapGuard.Lock()
+	factoryMapGuard.RLock()
 	obj := factoryMap[name]
-	factoryMapGuard.Unlock()
+	factoryMapGuard.RUnlock()
 	objType := reflect.TypeOf(obj)
 	objValue := reflect.ValueOf(obj)
 	create := func() interface{} {
