@@ -258,8 +258,12 @@ func QueryContext(ctx context.Context, handler Handler, col interface{}, query s
 		return err
 	}
 	defer rows.Close()
+	scan_, scanErr := rowsScan(rows, colItemType, colItemTagMap)
+	if scanErr != nil {
+		return scanErr
+	}
 	for rows.Next() {
-		appendErr := colAppend(rows, colValueElem, colItemType, colItemTagMap)
+		appendErr := colAppend(rows, &scan_, colValueElem, colItemType)
 		if appendErr != nil {
 			return appendErr
 		}
@@ -281,8 +285,12 @@ func QueryRowContext(ctx context.Context, handler Handler, col interface{}, quer
 		return err
 	}
 	defer rows.Close()
+	scan_, scanErr := rowsScan(rows, colItemType, colItemTagMap)
+	if scanErr != nil {
+		return scanErr
+	}
 	if rows.Next() {
-		appendErr := colAppend(rows, colValueElem, colItemType, colItemTagMap)
+		appendErr := colAppend(rows, &scan_, colValueElem, colItemType)
 		if appendErr != nil {
 			return appendErr
 		}
@@ -318,8 +326,12 @@ func StmtQueryContext(ctx context.Context, stmt *sql.Stmt, col interface{}, args
 		return err
 	}
 	defer rows.Close()
+	scan_, scanErr := rowsScan(rows, colItemType, colItemTagMap)
+	if scanErr != nil {
+		return scanErr
+	}
 	for rows.Next() {
-		appendErr := colAppend(rows, colValueElem, colItemType, colItemTagMap)
+		appendErr := colAppend(rows, &scan_, colValueElem, colItemType)
 		if appendErr != nil {
 			return appendErr
 		}
@@ -340,8 +352,12 @@ func StmtQueryRowContext(ctx context.Context, stmt *sql.Stmt, col interface{}, a
 		return err
 	}
 	defer rows.Close()
+	scan_, scanErr := rowsScan(rows, colItemType, colItemTagMap)
+	if scanErr != nil {
+		return scanErr
+	}
 	if rows.Next() {
-		appendErr := colAppend(rows, colValueElem, colItemType, colItemTagMap)
+		appendErr := colAppend(rows, &scan_, colValueElem, colItemType)
 		if appendErr != nil {
 			return appendErr
 		}
@@ -389,58 +405,67 @@ func colReflect(col interface{}) (colValueElem reflect.Value, colItemType reflec
 	return
 }
 
-func colAppend(rows *sql.Rows, colValueElem reflect.Value, colItemType reflect.Type, colItemTagMap map[string]string) error {
+func rowsScan(rows *sql.Rows, colItemType reflect.Type, colItemTagMap map[string]string) (scan, error) {
+	var scan_ scan
 	columns, columnErr := rows.Columns()
 	if columnErr != nil {
-		return columnErr
+		return scan_, columnErr
 	}
-	newValue := reflect.New(colItemType).Elem()
 	length := len(columns)
 	dest := make([]interface{}, length)
-	destColumn := make([]string, length)
-	for i, column := range columns {
-		if name, ok := colItemTagMap[column]; ok {
-			column = name
+	column := make([]string, length)
+	for i, item := range columns {
+		if name, ok := colItemTagMap[item]; ok {
+			item = name
 		} else {
 			//字段没设置tag,就按首字母大写找字段
-			column = monster.FirstUpper(column)
+			item = monster.FirstUpper(item)
 		}
-		if _, ok := colItemType.FieldByName(column); !ok {
-			return errors.New(column + " is not in col")
+		field, ok := colItemType.FieldByName(item)
+		if !ok {
+			return scan_, errors.New(item + " is not in col")
 		}
-		colField := newValue.FieldByName(column)
 		var addr interface{}
 		//防止数据库字段null出错
-		switch colField.Interface().(type) {
-		case string:
+		switch field.Type.Kind() {
+		case reflect.String:
 			addr = &sql.NullString{}
-		case int, int64:
+		case reflect.Int, reflect.Int64:
 			addr = &sql.NullInt64{}
-		case int32:
+		case reflect.Int32:
 			addr = &sql.NullInt32{}
-		case int16:
+		case reflect.Int16:
 			addr = &sql.NullInt16{}
-		case float32, float64:
+		case reflect.Float32, reflect.Float64:
 			addr = &sql.NullFloat64{}
-		case bool:
+		case reflect.Bool:
 			addr = &sql.NullBool{}
-		case time.Time:
-			addr = &sql.NullTime{}
-		case byte:
+		case reflect.Struct:
+			if field.Type == reflect.TypeOf((*time.Time)(nil)).Elem() {
+				addr = &sql.NullTime{}
+			}
+		case reflect.Uint8:
 			addr = &sql.NullByte{}
 		default:
-			return errors.New("colField type error")
+			return scan_, errors.New("colField type error")
 		}
 		dest[i] = addr
-		destColumn[i] = column
+		column[i] = item
 	}
-	err := rows.Scan(dest...)
+	scan_.dest = dest
+	scan_.column = column
+	return scan_, nil
+}
+
+func colAppend(rows *sql.Rows, scan_ *scan, colValueElem reflect.Value, colItemType reflect.Type) error {
+	err := rows.Scan(scan_.dest...)
 	if err != nil {
 		return err
 	}
-	for i, column := range destColumn {
-		colField := newValue.FieldByName(column)
-		switch obj := dest[i].(type) {
+	newValue := reflect.New(colItemType).Elem()
+	for i, item := range scan_.column {
+		colField := newValue.FieldByName(item)
+		switch obj := scan_.dest[i].(type) {
 		case *sql.NullString:
 			colField.SetString(obj.String)
 		case *sql.NullInt64:

@@ -16,3 +16,8 @@ type Statistics struct {
 	Use  int //正在使用
 	Idle int //正在空闲
 }
+
+type scan struct {
+	dest   []interface{}
+	column []string
+}
