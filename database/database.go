@@ -383,12 +383,12 @@ func colReflect(col interface{}) (colValueElem reflect.Value, colItemType reflec
 	}
 	colValueElem = colValue.Elem()
 	colItemType = colValueElem.Type()
-	if colValueElem.Kind() == reflect.Slice {
+	if colItemType.Kind() == reflect.Slice {
 		//获取切片里面item类型
 		colItemType = colItemType.Elem()
 	}
 	if colItemType.Kind() != reflect.Struct {
-		err = errors.New("col->item is not struct")
+		err = errors.New("colItem is not struct")
 		return
 	}
 	colItemTagMap = make(map[string]string)
