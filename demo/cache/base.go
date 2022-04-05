@@ -19,7 +19,7 @@ func main() {
 	monster.Init(factoryMap) //初始化工厂
 	defer cache.Close()
 	cache.Open(cache.Options{
-		ConnMaxLifetime: time.Minute * 3, //保存的空闲连接,最大存活3分钟就释放掉
+		ConnMaxLifetime: time.Minute * 3, //保存的连接最大存活3分钟就释放掉
 		MaxOpenConns:    10,              //连接池,最大打开10连接,超过阻塞等待
 		MaxIdleConns:    10,              //连接池,最大保存5个空闲连接
 		//StatisticsLog:   true,            //开启统计日志, 记录连接池的基本状态, 文件: log/statistics.log

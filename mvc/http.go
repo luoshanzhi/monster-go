@@ -427,6 +427,7 @@ func parseParam(req *http.Request, in reflect.Type) reflect.Value {
 				if valueType.Kind() == reflect.Slice {
 					listValue.Set(reflect.Append(listValue, newValue))
 				} else if valueType.Kind() == reflect.Array {
+					//如果是数组类型接收,参数可能超出数组长度
 					if i <= listLen-1 {
 						listValue.Index(i).Set(newValue)
 					}

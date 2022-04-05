@@ -58,10 +58,10 @@ func Open(options Options) {
 		password := item.Password
 		port := item.Port
 		pl := &redis.Pool{
-			Wait:        options.Wait,
-			IdleTimeout: options.ConnMaxLifetime,
-			MaxActive:   options.MaxOpenConns,
-			MaxIdle:     options.MaxIdleConns,
+			Wait:            options.Wait,
+			MaxConnLifetime: options.ConnMaxLifetime,
+			MaxActive:       options.MaxOpenConns,
+			MaxIdle:         options.MaxIdleConns,
 			Dial: func() (redis.Conn, error) {
 				conn, err := redis.Dial("tcp", host+":"+strconv.Itoa(port))
 				if err != nil {
