@@ -21,6 +21,7 @@ import (
 var (
 	factoryMap      map[string]interface{}
 	factoryMapGuard sync.RWMutex
+	typeMap         map[reflect.Type]string
 	RootPath        string
 	Args            struct {
 		Path     string
@@ -61,6 +62,10 @@ func Init(fm map[string]interface{}) {
 		panic(err)
 	}
 	factoryMap = fm
+	typeMap = make(map[reflect.Type]string)
+	for key, val := range factoryMap {
+		typeMap[reflect.TypeOf(val)] = key
+	}
 }
 
 func setSetting() error {
@@ -143,8 +148,7 @@ func SetSettingFile(file string) {
 
 func callFunc(obj interface{}, name string, args ...interface{}) {
 	objType := reflect.TypeOf(obj)
-	_, ok := objType.MethodByName(name)
-	if !ok {
+	if _, ok := objType.MethodByName(name); !ok {
 		return
 	}
 	objValue := reflect.ValueOf(obj)
@@ -163,14 +167,6 @@ func inject(obj interface{}) {
 	if objType.Kind() != reflect.Ptr {
 		return
 	}
-	typeMap := make(map[reflect.Type]string)
-	//防止并发遍历map异常
-	factoryMapGuard.RLock()
-	for key, val := range factoryMap {
-		oType := reflect.TypeOf(val)
-		typeMap[oType] = key
-	}
-	factoryMapGuard.RUnlock()
 	objType = objType.Elem()
 	objValue = objValue.Elem()
 	numField := objValue.NumField()
